@@ -1,0 +1,192 @@
+for NIN DATA SCHEMA 
+NIN (National Identity Number) - NIMC
+Format: 11-digit random number
+Typical Fields:
+
+NIN number (11 digits)
+First name, Middle name, Last name
+Date of birth
+Gender (Male/Female)
+Address (residential)
+State of origin
+LGA (Local Government Area)
+Phone number
+Email
+Photo (facial image - base64)
+Fingerprints (10 fingers captured, but typically not returned in verification)
+Height
+Next of kin information
+Marital status
+{
+  ninNumber: "12345678901",
+  firstName: "Chukwuemeka",
+  middleName: "Oluwaseun",
+  lastName: "Adeyemi",
+  dob: "15-03-1990",  // DD-MM-YYYY
+  gender: "M",  // M/F
+  phone: "+2348012345678",
+  email: "chukwu.adeyemi@example.com",
+  residentialAddress: "15 Awolowo Road, Ikoyi, Lagos",
+  stateOfOrigin: "Lagos",
+  lga: "Lagos Island",
+  height: "175cm",
+  maritalStatus: "Single",
+  image: "data:image/jpeg;base64,/9j/4AAQSkZJRg...",  // base64
+  enrollmentDate: "10-01-2015",
+  status: "active"
+}
+
+2 For BVN
+BVN (Bank Verification Number) - CBN/NIBSS
+Format: 11-digit unique number
+Typical Fields:
+
+BVN number (11 digits)
+First name, Middle name, Last name
+Date of birth
+Gender
+Phone number
+Email (optional)
+Enrollment bank
+Enrollment branch
+Registration date
+Photo (facial image - base64)
+Fingerprints (captured but not typically returned)
+Watch-list status (for fraud tracking)
+{
+  bvn_number: "22334455667",
+  first_name: "Chukwuemeka",
+  middle_name: "Oluwaseun",
+  last_name: "Adeyemi",
+  date_of_birth: "1990-03-15",  // YYYY-MM-DD
+  gender: "Male",  // Full word
+  phone_number: "08012345678",
+  email_address: "chukwu.adeyemi@example.com",
+  enrollment_bank: "Access Bank",
+  enrollment_branch: "Ikoyi Branch",
+  registration_date: "2014-02-14",
+  photograph: "iVBORw0KGgoAAAANSUhEUgAA...",  // base64 without prefix
+  watch_list_status: "clear"
+}
+3 FOR Drivers license
+Driver's License - FRSC
+Format: License number (alphanumeric)
+Typical Fields:
+
+License number
+First name, Middle name, Last name
+Date of birth
+Gender
+Blood group
+Height
+Address
+State of issue
+License class (A, B, C, D, E, F, G, H, J - can have up to 3)
+Issue date
+Expiry date (3 or 5 years validity)
+Photo (base64)
+Signature
+RID (Reference ID for verification)
+
+for Passport
+
+
+4 International Passport
+International Passport - NIS
+Format: Passport number (alphanumeric, typically 9 characters)
+Typical Fields:
+
+Passport number
+Surname, Given names
+Date of birth
+Gender
+Place of birth
+Nationality (Nigerian)
+Issue date
+Expiry date (5 or 10 years validity)
+Issuing authority
+Photo (base64)
+Signature
+NIN (now mandatory - linked)
+Passport type (Standard 32-page, 64-page)
+
+//note this thing 
+PSEUDOCODE:
+
+function normalizePhoto(rawPhoto, provider) {
+  
+  // Step 1: Detect if URL or base64
+  if (isURL(rawPhoto)) {
+    // Fetch image from URL
+    imageBuffer = await fetchImage(rawPhoto)
+    
+    // Convert to base64
+    base64String = bufferToBase64(imageBuffer)
+    
+    // Add data URI prefix
+    return `data:image/jpeg;base64,${base64String}`
+  }
+  
+  // Step 2: Handle base64 variations
+  if (hasDataURIPrefix(rawPhoto)) {
+    // Already formatted correctly
+    return rawPhoto
+  }
+  
+  if (hasPartialPrefix(rawPhoto)) {
+    // Extract base64 portion and re-format
+    cleanBase64 = extractBase64(rawPhoto)
+    return `data:image/jpeg;base64,${cleanBase64}`
+  }
+  
+  // Step 3: Raw base64 without prefix
+  return `data:image/jpeg;base64,${rawPhoto}`
+}
+
+function isURL(value) {
+  return value.startsWith('http://') || value.startsWith('https://')
+}
+
+async function fetchImage(url) {
+  try {
+    response = await httpClient.get(url, { responseType: 'arraybuffer' })
+    
+    // Validate image size (e.g., max 5MB)
+    if (response.data.length > 5 * 1024 * 1024) {
+      throw new Error('Image size exceeds 5MB limit')
+    }
+    
+    return response.data
+    
+  } catch (error) {
+    // Handle fetch failures
+    if (error.code === 'ENOTFOUND') {
+      throw new Error('Image URL not reachable')
+    }
+    throw error
+  }
+}
+
+NOemalizer 
+async normalize(rawProviderResponse)
+  INPUT: 
+    - rawProviderResponse: object (inconsistent format)
+  
+  LOGIC:
+    1. Extract and transform name fields
+    2. Convert date formats to DD-MM-YYYY
+    3. Standardize gender (M/F/Male/Female → Male/Female)
+    4. Normalize phone format
+    5. Handle image field:
+       a. If URL: call imageService.convertURLToBase64()
+       b. If base64: call imageService.normalizeImageField()
+    6. Map all fields to unified schema
+    7. Handle null/missing fields appropriately
+  
+  ERROR HANDLING:
+    - Image fetch fails → set photo: null, log error
+    - Date conversion fails → log warning, use raw value
+    - Missing required fields → throw ValidationError
+  
+  OUTPUT:
+    - Unified schema object
