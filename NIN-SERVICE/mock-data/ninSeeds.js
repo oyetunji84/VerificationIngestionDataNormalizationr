@@ -1,6 +1,4 @@
-const PLACEHOLDER_BASE64 =
-  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
-
+const PLACEHOLDER_IMAGE ="https://nimc.gov.ng/assets/mdi-02-CZP-4uWs.png"
 const ninSeeds = [
   {
     ninNumber: "12345678901",
@@ -16,7 +14,7 @@ const ninSeeds = [
     lga: "Lagos Island",
     height: "175cm",
     maritalStatus: "Single",
-    image: PLACEHOLDER_BASE64,
+    image: PLACEHOLDER_IMAGE,
     enrollmentDate: "10-01-2015",
     status: "active"
   },
@@ -34,7 +32,7 @@ const ninSeeds = [
     lga: "Kaduna North",
     height: "162cm",
     maritalStatus: "Married",
-    image: PLACEHOLDER_BASE64,
+    image: PLACEHOLDER_IMAGE,
     enrollmentDate: "05-03-2014",
     status: "active"
   },
@@ -52,7 +50,7 @@ const ninSeeds = [
     lga: "Enugu East",
     height: "180cm",
     maritalStatus: "Single",
-    image: PLACEHOLDER_BASE64,
+    image: PLACEHOLDER_IMAGE,
     enrollmentDate: "18-06-2016",
     status: "active"
   },
@@ -70,7 +68,7 @@ const ninSeeds = [
     lga: "Onitsha South",
     height: "158cm",
     maritalStatus: "Married",
-    image: PLACEHOLDER_BASE64,
+    image: PLACEHOLDER_IMAGE,
     enrollmentDate: "20-02-2013",
     status: "active"
   },
@@ -88,7 +86,7 @@ const ninSeeds = [
     lga: "Obio/Akpo",
     height: "172cm",
     maritalStatus: "Single",
-    image: PLACEHOLDER_BASE64,
+    image: PLACEHOLDER_IMAGE,
     enrollmentDate: "07-11-2017",
     status: "active"
   }

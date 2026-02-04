@@ -1,20 +1,36 @@
 const NinModel = require("../model/NinModel");
-
+const Joi= require("joi")
+const verifyNINSchema = Joi.object({
+  nin: Joi.string()
+    .length(11)
+    .pattern(/^[0-9]{11}$/)
+    .required()
+    .messages({
+      'string.length': 'NIN must be exactly 11 digits',
+      'string.pattern.base': 'NIN must contain only numbers',
+      'any.required': 'NIN is required'
+    })
+});
 const verifyNIN = async (req, res) => {
   try {
-    const { nin } = req.body;
-
-    if (!nin || !/^[0-9]{11}$/.test(nin)) {
+    console.log(`NINSERVIE: controller begining`)
+    const { error, value } = verifyNINSchema.validate(req.body);
+    
+    if (error) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "INVALID_NIN_FORMAT",
-          message: "NIN must be exactly 11 digits"
+          code: 'VALIDATION_ERROR',
+          message: error.details[0].message
         }
       });
     }
+
+    const { nin } = value;
+
     const record = await NinModel.findOne({ ninNumber: nin });
 
+    console.log(`NIN verification successful: ${nin}`);
     if (!record) {
       return res.status(404).json({
         success: false,

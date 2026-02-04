@@ -1,0 +1,46 @@
+const licenseSeeds = [
+    {
+      LicenseNo: "FKJ234567890",
+      FirstName: "Chukwuemeka",
+      MiddleName: "Oluwaseun",
+      LastName: "Adeyemi",
+      BirthDate: "15/03/1990",
+      Gen: "m",
+      BloodGroup: "O+",
+      HeightCm: 175,
+      ResidentialAddr: "15 Awolowo Road, Ikoyi, Lagos",
+      StateOfIssue: "Lagos State",
+      IssuedDate: "20/06/2020",
+      ExpiryDate: "19/06/2025",
+    },
+    {
+      LicenseNo: "ABC123456789",
+      FirstName: "Ngozi",
+      MiddleName: "Adaeze",
+      LastName: "Okonkwo",
+      BirthDate: "22/07/1985",
+      Gen: "f",
+      BloodGroup: "A+",
+      HeightCm: 165,
+      ResidentialAddr: "45 Akin Adesola Street, Victoria Island, Lagos",
+      StateOfIssue: "Lagos State",
+      IssuedDate: "15/03/2019",
+      ExpiryDate: "14/03/2024",
+    },
+    {
+      LicenseNo: "KDN987654321",
+      FirstName: "Ibrahim",
+      MiddleName: "Musa",
+      LastName: "Abdullahi",
+      BirthDate: "10/12/1992",
+      Gen: "m",
+      BloodGroup: "B+",
+      HeightCm: 180,
+      ResidentialAddr: "78 Ahmadu Bello Way, Kaduna",
+      StateOfIssue: "Kaduna State",
+      IssuedDate: "10/01/2021",
+      ExpiryDate: "09/01/2026",
+    }
+  ];
+
+module.exports=licenseSeeds
