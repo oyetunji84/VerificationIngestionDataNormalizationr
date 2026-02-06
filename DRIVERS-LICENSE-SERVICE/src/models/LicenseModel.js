@@ -9,7 +9,6 @@ const driversLicenseRecordSchema = new mongoose.Schema({
   },
   FirstName: {
     type: String,
-    required: true,
     trim: true
   },
   MiddleName: {
@@ -19,41 +18,35 @@ const driversLicenseRecordSchema = new mongoose.Schema({
   },
   LastName: {
     type: String,
-    required: true,
     trim: true
   },
   BirthDate: {
     type: String,
-    required: true
   },
   Gen: {
     type: String,
-    required: true,
-    enum: ['m', 'f']
   },
   BloodGroup: {
     type: String,
-    required: true
   },
   HeightCm: {
     type: Number,
-    required: true
+
   },
   ResidentialAddr: {
     type: String,
-    required: true
+
   },
   StateOfIssue: {
     type: String,
-    required: true
+
   },
   IssuedDate: {
     type: String,
-    required: true
   },
   ExpiryDate: {
     type: String,
-    required: true
+
   },
 
 }, {

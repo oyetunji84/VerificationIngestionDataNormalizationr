@@ -18,7 +18,6 @@ const companySchema = new mongoose.Schema({
   },
   status: {
     type: String,
-
     enum: ['active', 'revoked'],
     default: 'active'
   }
