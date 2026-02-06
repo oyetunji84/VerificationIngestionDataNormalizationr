@@ -5,3 +5,8 @@ index.js
 PASSPORT-SERVICE/node_modules
 index.js
 index.txt
+INTEGRATION_SERVICE/.env
+PASSPORT-SERVICE/.env
+BVN-SERVICE/.env
+NIN-SERVICE/.env
+DRIVERS-LICENSE-SERVICE/.env

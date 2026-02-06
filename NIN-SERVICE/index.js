@@ -36,7 +36,8 @@ app.get("/health", (req, res) => {
 const startServer = async () => {
   await connectDB();
 
-
+  await NinModel.deleteMany()
+  console.log(ninSeeds)
   const count = await NinModel.countDocuments();
   if (count === 0) {
     console.log("[NIN-SERVICE] Seeding NIN records...");

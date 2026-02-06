@@ -48,7 +48,7 @@ const verifyLicense = async (req, res) => {
 
     console.log(`License verification successful: ${license_number}`);
 
-    // Return raw provider response (PascalCase format, raw base64)
+   
     return res.status(200).json({
       success: true,
       data: {
@@ -65,9 +65,7 @@ const verifyLicense = async (req, res) => {
         LicenseClass: licenseRecord.LicenseClass,
         IssuedDate: licenseRecord.IssuedDate,
         ExpiryDate: licenseRecord.ExpiryDate,
-        PhotoBase64: licenseRecord.PhotoBase64,
-        SignatureBase64: licenseRecord.SignatureBase64,
-        ReferenceId: licenseRecord.ReferenceId
+
       }
     });
 
