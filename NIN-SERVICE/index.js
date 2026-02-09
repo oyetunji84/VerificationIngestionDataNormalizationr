@@ -8,6 +8,7 @@ const NinRoutes = require("./src/routes/NinRoutes");
 const NinModel = require("./src/model/NinModel");
 
 const ninSeeds = require("./mock-data/ninSeeds");
+const { errorHandler } = require('./src/Utility/error');
 require('dotenv').config()
 
 const connectDB = async () => {
@@ -32,7 +33,7 @@ app.get("/health", (req, res) => {
   res.json({ service: "NIN-Provider", status: "running", port: PORT });
 });
 
-
+app.use(errorHandler)
 const startServer = async () => {
   await connectDB();
 

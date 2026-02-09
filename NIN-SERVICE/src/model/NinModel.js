@@ -4,11 +4,11 @@ const mongoose = require("mongoose");
 const ninRecordSchema = new mongoose.Schema(
   {
     ninNumber: { type: String, required: true, unique: true},
-    firstName: { type: String, required: true },
+    firstName: { type: String, },
     middleName: { type: String, default: null },
-    lastName: { type: String, required: true },
-    dob: { type: String, required: true },           
-    gender: { type: String, required: true, enum: ["M", "F"] },
+    lastName: { type: String, },
+    dob: { type: String, },           
+    gender: { type: String, },
     phone: { type: String, default: null },
     email: { type: String, default: null },
     residentialAddress: { type: String, default: null },

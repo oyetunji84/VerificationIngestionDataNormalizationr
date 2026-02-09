@@ -31,6 +31,7 @@ const driversLicenseRecordSchema = new mongoose.Schema({
   },
   HeightCm: {
     type: Number,
+    type: String,
 
   },
   ResidentialAddr: {
