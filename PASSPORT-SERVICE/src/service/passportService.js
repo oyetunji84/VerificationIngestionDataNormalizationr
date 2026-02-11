@@ -4,7 +4,7 @@ const PassportService= async (passport_number)=>{
     try{
 
         const record = await PassportRecord.findOne({ passportNumber: passport_number });
-
+console.log(record);
     if (!record) {
         throw new NotFoundError("PASSPORT")
     }

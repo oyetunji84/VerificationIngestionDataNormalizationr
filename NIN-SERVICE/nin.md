@@ -1,0 +1,709 @@
+Perfect. This is exactly the right pause to take.
+Before schemas, before Redis tricks, before code — we define the rules of money. Once those are clear, the tech becomes obvious.
+
+I’ll do this in three layers:
+
+Charging policy decisions (business rules)
+
+Technical failure edge cases (network, retries, partial failure)
+
+Concurrency + correctness edge cases (race conditions, double spend)
+
+I’ll be explicit and opinionated like a senior engineer would be in a design review.
+
+1️⃣ Charging policy edge cases (this must be written down)
+
+These are product + legal + trust decisions.
+
+A. NIN does not exist
+
+Example:
+
+Client sends a validly-formatted NIN
+
+Identity service responds: “NIN not found”
+
+Options:
+
+❌ Do NOT charge
+
+Reason: customer got no value
+
+Common in fintech & identity systems
+
+⚠️ Charge a reduced fee
+
+You still made an external call
+
+✅ Charge full fee
+
+Risky for trust unless contract says so
+
+👉 Industry standard:
+Do NOT charge if the NIN does not exist
+
+Reason:
+
+Customers expect to pay for successful identity verification, not lookup failure
+
+You avoid disputes
+
+📌 Recommendation:
+
+Charge only if identity service returns a verified, valid identity
+
+B. Invalid NIN format (client error)
+
+Example:
+
+Wrong length
+
+Non-numeric characters
+
+👉 Do NOT call identity service
+👉 Do NOT charge
+
+Return:
+
+400 Bad Request
+
+No wallet interaction at all
+
+C. Identity service says “temporarily unavailable”
+
+Example:
+
+Timeout
+
+5xx error
+
+Network failure
+
+👉 Do NOT charge
+
+Reason:
+
+You didn’t get a result
+
+This is your infrastructure problem
+
+D. Identity service returns “partial / inconclusive”
+
+Example:
+
+Data mismatch
+
+Incomplete record
+
+“Try again later”
+
+👉 Do NOT charge
+👉 Log usage but no debit
+
+E. Identity service returns success but downstream fails
+
+Example:
+
+Identity service responds OK
+
+Your DB crashes before debit
+
+This is a critical money edge case (we’ll solve later with transactions + idempotency).
+
+2️⃣ Wallet & balance edge cases
+F. Wallet balance is exactly equal to cost
+
+Example:
+
+Balance = ₦100
+
+Cost = ₦100
+
+👉 Allow request
+👉 After success → balance = ₦0
+
+Next request:
+
+Reject with 402 Payment Required or 403 Insufficient Funds
+
+G. Wallet balance < cost
+
+Example:
+
+Balance = ₦50
+
+👉 Reject immediately
+👉 Do NOT call identity service
+
+This saves you money and avoids debt.
+
+H. Wallet is funded while requests are in flight
+
+Example:
+
+Balance = ₦0
+
+5 requests rejected
+
+Wallet funded ₦10,000
+
+New requests allowed
+
+👉 Correct behavior
+Old rejected requests should not magically retry
+
+I. Wallet goes negative (must NEVER happen)
+
+If this happens:
+
+You have a serious bug
+
+Ledger and balance are inconsistent
+
+We will design to make this mathematically impossible.
+
+3️⃣ Network & retry edge cases (very important)
+J. Client retries the same request
+
+Example:
+
+Client sends request
+
+Network times out
+
+Client retries
+
+Without idempotency:
+
+You charge twice ❌
+
+👉 This is why we must create a request_id
+
+K. Client retries after success
+
+Example:
+
+Identity check succeeded
+
+Debit succeeded
+
+Client never received response
+
+Client retries
+
+👉 Must return same result
+👉 Must NOT debit again
+
+L. Payment webhook fires twice (funding)
+
+Example:
+
+Paystack sends webhook twice
+
+👉 Wallet funding must be idempotent
+👉 Same payment reference = only one credit
+
+4️⃣ Concurrency & race condition edge cases
+M. Two requests at the same time, one balance
+
+Example:
+
+Balance = ₦100
+
+Two NIN requests start simultaneously
+
+Both see:
+
+“Balance >= 100” 😬
+
+Without locking:
+
+Both succeed
+
+Balance becomes -₦100 ❌
+
+👉 We must ensure:
+
+Only one request wins
+
+The other fails or waits
+
+N. One request succeeds, one fails
+
+Example:
+
+Request A succeeds → debit
+
+Request B calls identity service but balance is now 0
+
+👉 Request B must fail before debit
+👉 Preferably fail before calling identity service
+
+O. Identity service is slow
+
+Example:
+
+10 seconds response time
+
+Meanwhile, wallet balance changes
+
+👉 You cannot “reserve” money incorrectly
+👉 We’ll need a reservation / pending state
+
+5️⃣ Accounting & audit edge cases
+P. Ledger mismatch
+
+If:
+
+Sum(credits) − sum(debits) ≠ wallet.balance
+
+👉 This is an emergency
+👉 Ledger is king, balance is derived
+
+We’ll design:
+
+Strong DB constraints
+
+Periodic reconciliation
+
+Q. Manual admin adjustments
+
+Example:
+
+Admin credits wallet
+
+Admin debits wallet (refund, penalty)
+
+👉 Must go through same ledger
+👉 Never directly edit balance
+
+R. Currency changes (future-proofing)
+
+Today:
+
+Only NGN
+
+Tomorrow:
+
+Multiple currencies
+
+👉 Even if not now:
+
+Store currency in tables
+
+6️⃣ Request identity edge cases (since you said no request_id yet)
+S. Same NIN, same company, same second
+
+Is this:
+
+A retry?
+
+A new request?
+
+👉 You cannot guess
+
+So we will require:
+
+client_request_id (UUID)
+
+Generated by client OR by your gateway
+
+T. Client forgets to send request_id
+
+👉 Reject request
+👉 Force correctness
+
+7️⃣ Summary of charging rule (this should be written in docs)
+
+We charge exactly once, and only when:
+
+The request is valid
+
+Wallet balance is sufficient
+
+Identity service returns a verified success
+
+The request_id has not been charged before
+
+Everything else:
+❌ No charge
+
+Before next step: confirm these 3 decisions
+
+Reply with Yes / No / Change for each:
+
+1️⃣ Charge ONLY on verified successful identity (not found = no charge)
+2️⃣ Every NIN request must include a unique request_id
+3️⃣ Insufficient balance → reject before calling identity service
+
+Once you confirm, next we’ll:
+➡️ Define request lifecycle states
+➡️ Design exactly-once debit flow
+➡️ Write Postgres schema with constraints
+➡️ Decide where Redis actually helps (and where it must NOT be used)
+
+This is solid thinking. You’re designing a real billing system, not a toy.
+
+
+////// from chatgpt 
+nior design doc or architecture walkthrough.
+No code yet — just how the system behaves, why it’s safe, and how we avoid money bugs.
+
+🎯 Goal (restated clearly)
+
+Build a production-grade billing + wallet system for an existing Node.js identity (NIN) service such that:
+
+Companies pre-fund a wallet
+
+Each successful NIN verification costs money
+
+Billing is:
+
+Correct
+
+Exactly-once
+
+Concurrency-safe
+
+Auditable
+
+System survives:
+
+Retries
+
+Network failures
+
+High parallel traffic
+
+Postgres = source of truth
+Redis = performance + coordination helper, never authority
+
+🧠 Core design principles (non-negotiable)
+
+These guide every decision:
+
+Ledger-first accounting
+
+Balance is derived from transactions
+
+No “magic balance updates”
+
+Exactly-once charging
+
+One request → at most one debit
+
+No charge without value
+
+Only charge on verified identity success
+
+No negative balances
+
+Must be mathematically impossible
+
+Idempotency everywhere
+
+Requests, funding, retries
+
+🧩 High-level components
+
+You will add 3 major logical components:
+
+Wallet Service
+
+Billing Engine
+
+Request Lifecycle Manager
+
+These may live in the same codebase, but conceptually they are separate.
+
+1️⃣ Wallet model (how money exists)
+Entities (conceptually)
+
+Wallet
+
+Owned by a company
+
+One currency (NGN)
+
+Transaction (Ledger Entry)
+
+CREDIT or DEBIT
+
+Immutable
+
+Balance
+
+Cached for speed
+
+Derived from ledger
+
+Golden rule
+
+Never update balance without inserting a transaction
+
+2️⃣ Request identity (the foundation of correctness)
+
+Since you confirmed YES to request IDs:
+
+Every NIN request MUST have:
+
+request_id (UUID)
+
+company_id
+
+service_type = NIN_VERIFICATION
+
+This ID represents:
+
+One business action
+
+One possible charge
+
+One ledger outcome
+
+If client doesn’t send it:
+❌ Reject the request
+
+3️⃣ Request lifecycle (this is the heart of the system)
+
+Every request moves through explicit states.
+
+Request states
+RECEIVED
+→ VALIDATED
+→ FUNDS_RESERVED
+→ IDENTITY_CALLED
+→ SUCCESS | FAILED
+→ DEBITED | NOT_CHARGED
+
+
+You don’t have to store all states physically, but mentally and logically, this flow matters.
+
+4️⃣ Exact flow for a NIN verification request
+Step 1: Request comes in
+
+Validate:
+
+request_id present
+
+NIN format valid
+
+If invalid → return 400, stop
+
+Step 2: Idempotency check
+
+Check:
+
+“Have I seen this request_id before for this company?”
+
+If yes:
+
+Return the previous result
+
+Do NOT re-charge
+
+Do NOT re-call identity service
+
+This protects against:
+
+Client retries
+
+Network timeouts
+
+Step 3: Pre-check balance (fast path)
+
+Read balance (Redis or Postgres)
+
+If balance < cost:
+
+Reject immediately
+
+Do NOT call identity service
+
+⚠️ This is a pre-check, not final authority
+
+Step 4: Reserve funds (critical section)
+
+This is where most systems fail.
+
+You must:
+
+Prevent two requests from spending the same money
+
+Strategy (high-level)
+
+Use Postgres row-level locking
+
+One transaction:
+
+Lock wallet row
+
+Re-check balance
+
+Create a pending debit record tied to request_id
+
+If balance is now insufficient:
+
+Abort
+
+Other request already won
+
+This ensures:
+
+No double spend
+
+No negative balance
+
+Step 5: Call identity service
+
+Outside the DB transaction
+
+Because it’s slow and external
+
+Results:
+
+SUCCESS (verified identity)
+
+FAILURE (not found, timeout, error)
+
+Step 6: Finalize billing
+If identity SUCCESS
+
+Convert pending debit → final debit
+
+Mark request as charged
+
+Commit
+
+If identity FAILURE
+
+Cancel pending debit
+
+No charge
+
+Commit
+
+5️⃣ Funding the wallet
+
+Funding is just another ledger event.
+
+Rules
+
+Every funding action has:
+
+funding_reference (payment ID)
+
+Funding is idempotent
+
+Flow
+
+Receive funding request / webhook
+
+Check if funding_reference already exists
+
+If yes → ignore
+
+If no:
+
+Insert CREDIT transaction
+
+Update wallet balance
+
+6️⃣ Redis: what it does and what it NEVER does
+Redis is used for:
+
+Balance caching
+
+Short-lived locks (optional)
+
+Rate limiting
+
+Fast reads
+
+Redis is NOT used for:
+
+❌ Final balance
+❌ Ledger
+❌ Billing decisions
+
+If Redis goes down:
+
+System still works
+
+Just slower
+
+7️⃣ APIs you will expose
+Wallet
+
+POST /wallet/fund
+
+GET /wallet/balance
+
+Billing
+
+GET /billing/transactions
+
+GET /billing/usage
+
+Identity
+
+POST /nin/verify
+
+Requires request_id
+
+Enforces billing rules
+
+8️⃣ Edge case handling (how we sleep at night)
+Scenario	Outcome
+Client retries	Same response, no double charge
+Two concurrent requests	One wins, one fails
+NIN not found	No charge
+Identity timeout	No charge
+DB crash after success	Request marked pending → retried safely
+Webhook fires twice	Single credit
+Balance exactly equals cost	Allowed
+Balance insufficient	Rejected early
+9️⃣ Observability & audit (often forgotten)
+
+You will log:
+
+request_id
+
+wallet_id
+
+transaction_id
+
+before_balance / after_balance
+
+identity_response_code
+
+This lets you:
+
+Reconcile money
+
+Resolve disputes
+
+Debug production issues
+
+10️⃣ Why this design is safe
+
+✔ No negative balances
+✔ No double charges
+✔ Retry-safe
+✔ Concurrency-safe
+✔ Auditable
+✔ Matches fintech standards
+
+This is how real payment and billing systems are built.
+
+Next steps (order matters)
+
+If you’re ready, we go step by step:
+
+1️⃣ Design database schema (wallets, transactions, requests)
+2️⃣ Write the exact SQL patterns (locking + constraints)
+3️⃣ Define idempotency strategy in detail
+4️⃣ Redis integration plan
+5️⃣ Failure recovery scenarios
+
+Say “Start with schema” and we’ll design tables like a production system, not a tutorial.

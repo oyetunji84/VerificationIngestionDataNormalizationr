@@ -1,17 +1,34 @@
-const NinService = require("../service/ninService");
+const { verifyNINWithBilling } = require("../service/ninService");
 const { asyncHandler } = require("../Utility/error");
-const verifyNIN= asyncHandler(async (req, res)=>{
-  const {nin}=req.body
-  const record= await NinService(nin)
+const { v4: uuidv4 } = require("uuid");
+
+const verifyNIN = asyncHandler(async (req, res) => {
+  const { nin } = req.body;
+
+  const companyId = req.company?.id;
+  const requestId =
+    req.header("x-idempotency-key") ||
+    req.header("X-IDEMPOTENCY-KEY") ||
+    uuidv4();
+
+  const result = await verifyNINWithBilling({
+    ninNumber: nin,
+    requestId,
+    companyId,
+  });
+
+  const record = result.data;
+
   return res.status(200).json({
     success: true,
+    requestId: result.requestId,
     data: {
       ninNumber: record.ninNumber,
       firstName: record.firstName,
       middleName: record.middleName,
       lastName: record.lastName,
-      dob: record.dob,                        
-      gender: record.gender,                
+      dob: record.dob,
+      gender: record.gender,
       phone: record.phone,
       email: record.email,
       residentialAddress: record.residentialAddress,
@@ -19,10 +36,11 @@ const verifyNIN= asyncHandler(async (req, res)=>{
       lga: record.lga,
       height: record.height,
       maritalStatus: record.maritalStatus,
-      image: record.image,                     // base64 with data URI
+      image: record.image, // base64 with data URI
       enrollmentDate: record.enrollmentDate,
-      status: record.status
-    }
-  })
-})
+      status: record.status,
+    },
+  });
+});
+
 module.exports = { verifyNIN };

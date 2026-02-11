@@ -47,30 +47,48 @@ class AppError extends Error {
     }
   }
   
+  class InsufficientFundsError extends AppError {
+    constructor(service, message, metadata = {}) {
+      super(`.${message}`, 402, true, metadata);
+    }
+  }
 
 const asyncHandler = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
-  
-const errorHandler = (err, req, res, next) => {
 
-  let error = { ...err };
-  error.message = err.message;
-  error.statusCode = err.statusCode || 500;
-  error.isOperational = err.isOperational || false;
-  error.metadata= err.metadata || {}
-   res.status(error.statusCode).json({
+const errorHandler = (err, req, res, next) => {
+  const statusCode = err.statusCode || 500;
+  const isOperational = err.isOperational || false;
+
+  const message = isOperational ? err.message : "Something went wrong";
+
+  const response = {
     success: false,
     error: {
-      message: error.message,
-      isOperational: error.isOperational? `is-Operational`:`not operational`,
-      metadata:error.metadata
-    }
-  });
+      message,
+    },
+  };
+
+  if (isOperational) {
+    response.error.details = err.details || null;
+    response.error.metadata = err.metadata || null;
+  }
+
+   if (process.env.NODE_ENV === "development") {
+     response.error.stack = err.stack;
+   }
+
+   console.error(err);
+
+   res.status(statusCode).json(response);
 };
 
 
+
+
   module.exports = {
+    InsufficientFundsError,
     errorHandler,
     asyncHandler,
     AppError,
@@ -78,5 +96,5 @@ const errorHandler = (err, req, res, next) => {
     NotFoundError,
     UnauthorizedError,
     DatabaseError,
-    ExternalServiceError
+    ExternalServiceError,
   };

@@ -3,8 +3,10 @@ const app = express();
 const port = 3000;
 const mongoose = require("mongoose");
 const cors = require("cors");
-
+const { connectRedis } = require("./src/infra/redisDb");
+const { postgresDb } = require("./src/infra/postgresDb");
 const NinRoutes = require("./src/routes/NinRoutes");
+const WalletRoutes = require("./src/routes/WalletRoutes");
 const NinModel = require("./src/model/NinModel");
 
 const ninSeeds = require("./mock-data/ninSeeds");
@@ -14,6 +16,7 @@ require('dotenv').config()
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI);
+
     console.log(`[NIN-SERVICE] MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
     console.error(`[NIN-SERVICE] MongoDB Connection Error: ${error.message}`);
@@ -28,6 +31,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/", NinRoutes);
+app.use("/", WalletRoutes);
 
 app.get("/health", (req, res) => {
   res.json({ service: "NIN-Provider", status: "running", port: PORT });
@@ -36,16 +40,19 @@ app.get("/health", (req, res) => {
 app.use(errorHandler)
 const startServer = async () => {
   await connectDB();
-
-  await NinModel.deleteMany()
-  console.log(ninSeeds)
+  await postgresDb();
+  await connectRedis();
+  await NinModel.deleteMany();
+  // console.log(ninSeeds)
   const count = await NinModel.countDocuments();
   if (count === 0) {
     console.log("[NIN-SERVICE] Seeding NIN records...");
     await NinModel.insertMany(ninSeeds);
     console.log(`[NIN-SERVICE] Seeded ${ninSeeds.length} NIN records`);
   } else {
-    console.log(`[NIN-SERVICE] Already has ${count} NIN records. Skipping seed.`);
+    console.log(
+      `[NIN-SERVICE] Already has ${count} NIN records. Skipping seed.`,
+    );
   }
 
   app.listen(PORT, () => {
