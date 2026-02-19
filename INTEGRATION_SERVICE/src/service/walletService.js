@@ -1,10 +1,14 @@
 const { redisClient } = require("../infra/redisDb");
-const { eq } = require("drizzle-orm");
+const { eq, sql } = require("drizzle-orm");
 const { v4: uuidv4 } = require("uuid");
 const { db } = require("../infra/postgresDb");
-const { wallets } = require("../model/schema/wallets");
-const { walletTransactions } = require("../model/schema/walletTransactions");
-const { NotFoundError, InsufficientFundsError, ValidationError } = require("../Utility/error");
+const { wallets } = require("../models/schema/wallets");
+const { walletTransactions } = require("../models/schema/walletTransactions");
+const {
+  NotFoundError,
+  InsufficientFundsError,
+  ValidationError,
+} = require("../../utility/error");
 
 const getBalance = async (companyId) => {
   console.log("Getting wallet balance", { companyId });
@@ -30,7 +34,7 @@ const getBalance = async (companyId) => {
 
 const fundWallet = async ({ amountInKobo, companyId, requestId }) => {
   console.log("FUNDING WALLET", { companyId, amountInKobo, requestId });
-  
+
   if (amountInKobo < 0) {
     throw new ValidationError("Amount cannot be negative", { amountInKobo });
   }
@@ -79,7 +83,7 @@ const fundWallet = async ({ amountInKobo, companyId, requestId }) => {
         amount: amountInKobo,
         balanceBefore,
         balanceAfter,
-        reference: requestId, // identifier has to be from there side
+        reference: uuidv4(),
       })
       .returning();
 
@@ -120,9 +124,6 @@ const debitWallet = async ({
     if (cacheResult) return JSON.parse(cacheResult);
   }
 
-  // Idempotent check in DB
-  
-
   const result = await db.transaction(async (tx) => {
     if (requestId) {
       const [existing] = await tx
@@ -162,6 +163,14 @@ const debitWallet = async ({
     const balanceBefore = wallet.balance;
     const balanceAfter = balanceBefore - amountInKobo;
 
+    await tx
+      .update(wallets)
+      .set({
+        balance: balanceAfter,
+        updatedAt: new Date(),
+      })
+      .where(eq(wallets.id, wallet.id));
+
     const [transaction] = await tx
       .insert(walletTransactions)
       .values({
@@ -176,14 +185,6 @@ const debitWallet = async ({
         reference: uuidv4(),
       })
       .returning();
-
-    await tx
-      .update(wallets)
-      .set({
-        balance: balanceAfter,
-        updatedAt: new Date(),
-      })
-      .where(eq(wallets.id, wallet.id));
 
     console.log("Wallet debited successfully");
     return { success: true, transaction };
@@ -215,24 +216,23 @@ const getWalletHistory = async ({ companyId, limit, offset }) => {
     .from(walletTransactions)
     .where(eq(walletTransactions.walletId, wallet.id));
 
-
   const transactions = await db
     .select()
     .from(walletTransactions)
     .where(eq(walletTransactions.walletId, wallet.id))
-    .orderBy(walletTransactions.createdAt).limit(limit).offset(offset);
-
+    .orderBy(walletTransactions.createdAt)
+    .limit(limit)
+    .offset(offset);
 
   return {
     transactions,
     pagination: {
       limit,
       offset,
-      total:count,
+      total: count,
     },
   };
 };
-
 
 module.exports = {
   getBalance,

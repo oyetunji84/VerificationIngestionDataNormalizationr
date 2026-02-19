@@ -52,7 +52,20 @@ class AppError extends Error {
       super(`.${message}`, 402, true, metadata);
     }
   }
+  class ProviderInsufficientFundsError extends AppError {
+    constructor(provider, message, metadata = {}) {
+      super(`Provider insufficient funds: ${message}`, 503, true, metadata);
+      this.name = "ProviderInsufficientFundsError";
+      this.provider = provider;
+    }
+  }
 
+class RateLimitExceededError extends AppError {
+    constructor(message = 'Rate limit exceeded', metadata = {}) {
+      super(message, 429, true, metadata);
+      this.name = 'RateLimitExceededError';
+    }
+  }
 const asyncHandler = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
@@ -88,6 +101,8 @@ const errorHandler = (err, req, res, next) => {
 
 
   module.exports = {
+    RateLimitExceededError,
+    ProviderInsufficientFundsError,
     InsufficientFundsError,
     errorHandler,
     asyncHandler,

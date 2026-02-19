@@ -1,4 +1,4 @@
-const { getHistoryByFilters, getVerificationStats } = require('../service/historyService');
+const { getHistoryByFilters,  } = require('../service/historyService');
 const getHistory = async (req, res, next) => {
   try {
     const company = req.company;
@@ -25,12 +25,10 @@ const getHistory = async (req, res, next) => {
       status
     };
     
-    // Remove undefined filters
-    Object.keys(filters).forEach(key => {
+      Object.keys(filters).forEach(key => {
       if (filters[key] === undefined) delete filters[key];
     });
     
-    // Get history with pagination
     const result = await getHistoryByFilters(filters, { page, limit });
     
     console.log('History fetched successfully', {

@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-
+const {createMiddleware} = require("../middleware/rateLimitMiddleware");
 const { apiKeyAuth } = require("../middleware/apiKeyAuth");
 const validate = require("../middleware/veriffyMIiddleware");
 const {
@@ -18,6 +18,7 @@ router.post(
   "/wallet/fund",
   apiKeyAuth,
   validate(fundWalletSchema),
+  createMiddleware(), // Apply rate limiting middleware to this route
   fundWallet,
 );
 

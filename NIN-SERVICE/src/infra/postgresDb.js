@@ -4,7 +4,7 @@ const schema= require("../model/schema/t")
 const { Pool } = pkg;
 
 const pool = new Pool({
-  connectionString: 'postgres://Ibukun:password@localhost:5432/Bank',
+  connectionString: process.env.POSTGRES_URL,
 });
 
 

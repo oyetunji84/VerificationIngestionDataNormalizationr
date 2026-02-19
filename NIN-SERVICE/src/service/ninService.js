@@ -1,11 +1,12 @@
 const NinModel = require("../model/NinModel");
+const { redisClient } = require("../infra/redisDb");
 const { db } = require("../infra/postgresDb");
 const { v4: uuidv4 } = require("uuid");
 const { ninRequests } = require("../model/schema/ninRequests");
 const walletService = require("./walletService");
 const { eq } = require("drizzle-orm");
 const { NotFoundError, InsufficientFundsError } = require("../Utility/error");
-
+const { cacheHitCounter, cacheMissCounter } = require("../infra/observe");
 const COST_IN_NAIRA = 100;
 const COST_IN_KOBO = COST_IN_NAIRA * 100;
 
@@ -43,17 +44,6 @@ const verifyNINWithBilling = async ({ ninNumber, requestId, companyId }) => {
       .where(eq(ninRequests.requestId, requestId))
       .limit(1);
 
-    if (existingRequest) {
-      const existingRecord =
-        existingRequest.status === "SUCCESS"
-          ? await NinModel.findOne({ ninNumber: existingRequest.ninNumber })
-          : null;
-
-      console.log("Idempotent NIN verification request - returning existing");
-      return buildResultFromRequest(existingRequest, existingRecord);
-    }
-
-    // STEP 2: Check wallet balance
     const balance = await walletService.getBalance(companyId);
 
     if (balance.balance < COST_IN_KOBO) {
@@ -86,6 +76,20 @@ const verifyNINWithBilling = async ({ ninNumber, requestId, companyId }) => {
       })
       .returning();
 
+    const cacheKey = ninNumber ? `NIN:${ninNumber}` : null;
+    if (cacheKey) {
+      const cacheResult = await redisClient.get(cacheKey);
+      if (cacheResult) {
+        // set the rate of tracking tthe hit and miss
+        cacheHitCounter.inc();
+        return JSON.parse(cacheResult);
+      } else {
+        // set the rate for tracking the miss but it must not disturb the flow
+        cacheMissCounter.inc();
+      }
+    }
+
+    //I CAN CHECK IF THE NIN IS IN MY CACHE OR REDIS FIRST BEFORE i MAKE DIRECT CALL TO THE DATABASE
     const record = await NinModel.findOne({ ninNumber });
 
     if (!record) {
@@ -113,15 +117,18 @@ const verifyNINWithBilling = async ({ ninNumber, requestId, companyId }) => {
         updatedAt: new Date(),
       })
       .where(eq(ninRequests.id, ninRequest.id));
-
-    console.log(`NIN verification successful: ${ninNumber}`);
-    return buildResultFromRequest(
+    const result = buildResultFromRequest(
       {
         ...ninRequest,
         status: "SUCCESS",
       },
       record,
     );
+    if (cacheKey) {
+      await redisClient.set(cacheKey, JSON.stringify(result), { EX: 8400 });
+    }
+    console.log(`NIN verification successful: ${ninNumber}`);
+    return result;
   } catch (error) {
     if (
       error instanceof NotFoundError ||

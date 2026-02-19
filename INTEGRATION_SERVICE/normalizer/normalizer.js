@@ -1,191 +1,155 @@
-const { normalizeImageField } = require('../utility/imageUtil');
-const { getCurrentTimestamp,normalizeDateToStandard } = require('../utility/dateUtils');
-
-
-const ninNormalize = async (ninResponse) => {
-  try {
-    console.log('Normalizing NIN response');
-    
-    const normalized = {
-      firstName: ninResponse.firstName || null,
-      middleName: ninResponse.middleName || null,
-      lastName: ninResponse.lastName || null,
-      dateOfBirth: ninResponse.dob || null,
-      
-      gender: ninResponse.gender === 'M' ? 'Male' : ninResponse.gender === 'F' ? 'Female' : null,
-      
-      email: ninResponse.email || null,
-      phone: ninResponse.phone || null,
-      address: ninResponse.residentialAddress || null,
-      stateOfOrigin: ninResponse.stateOfOrigin || null,
-      
-      documentNumber: ninResponse.ninNumber || null,
-      documentType: 'NIN',
-      
-      photo: await normalizeImageField(ninResponse.image, 'NIN'),
-      
-      verifiedAt: getCurrentTimestamp(),
-      status: 'success'
-    };
-    
-    
-    if (ninResponse.image && !normalized.photo) {
-      normalized.status = 'partial';
-      console.log('NIN photo normalization failed, returning partial status');
-    }
-    
-    console.log('NIN normalization complete', { status: normalized.status });
-    
-    return normalized;
-    
-  } catch (error) {
-    console.log('Error normalizing NIN response', { error: error.message });
-    throw new Error(`Failed to normalize NIN response: ${error.message}`);
-  }
-};
-
-
-const bvnNormalize = async (bvnResponse) => {
-  try {
-    console.log('Normalizing BVN response');
-    
-
-    const normalized = {
-      firstName: bvnResponse.first_name || null,
-      middleName: bvnResponse.middle_name || null,
-      lastName: bvnResponse.last_name || null,
-      dateOfBirth: normalizeDateToStandard(bvnResponse.date_of_birth) || null,
-      gender: bvnResponse.gender || null,
-      email: bvnResponse.email_address || null,
-      phone: bvnResponse.phone_number,
-      address: null,
-      stateOfOrigin: null,
-      documentNumber: bvnResponse.bvn_number || null,
-      documentType: 'BVN',
-      photo: await normalizeImageField(bvnResponse.photograph, 'BVN'),
-      verifiedAt: getCurrentTimestamp(),
-      status: 'success'
-    };
-    
-    if (bvnResponse.photograph && !normalized.photo) {
-      normalized.status = 'partial';
-      console.log('BVN photo fetch/conversion failed, returning partial status');
-    }
-    
-    console.log('BVN normalization complete', { 
-      status: normalized.status,
-      photoFetched: !!normalized.photo
-    });
-    
-    return normalized;
-    
-  } catch (error) {
-    console.error('Error normalizing BVN response', { error: error.message });
-    throw new Error(`Failed to normalize BVN response: ${error.message}`);
-  }
-};
-
-const licenseNormalize = async (licenseResponse) => {
-  try {
-    console.log('Normalizing Drivers License response');
-    
-    const normalized = {
-      firstName: licenseResponse.FirstName || null,
-      middleName: licenseResponse.MiddleName || null,
-      lastName: licenseResponse.LastName || null,
-    dateOfBirth: normalizeDateToStandard(licenseResponse.BirthDate) || null,
-     gender: licenseResponse.Gen?.toLowerCase() === 'm' ? 'Male' : 
-              licenseResponse.Gen?.toLowerCase() === 'f' ? 'Female' : null,
-      email: null,
-      phone: null,    
-      address: licenseResponse.ResidentialAddr || null,
-      stateOfOrigin: licenseResponse.StateOfIssue || null,
-      documentNumber: licenseResponse.LicenseNo || null,
-      documentType: 'DRIVERS_LICENSE',
-      photo: await normalizeImageField(licenseResponse.PhotoBase64, 'DRIVERS_LICENSE'),
-      verifiedAt: getCurrentTimestamp(),
-      status: 'success'
-    };
-    
-    // Check if photo normalization failed
-    if (licenseResponse.PhotoBase64 && !normalized.photo) {
-      normalized.status = 'partial';
-      console.log('Drivers License photo normalization failed, returning partial status');
-    }
-    
-    console.log('Drivers License normalization complete', { status: normalized.status });
-    
-    return normalized;
-    
-  } catch (error) {
-    console.log('Error normalizing Drivers License response', { error: error.message });
-    throw new Error(`Failed to normalize Drivers License response: ${error.message}`);
-  }
-};
-
-
-
-const extractFirstName = (givenNames) => {
-  if (!givenNames) return null;
-  const names = givenNames.trim().split(" ");
-  return names[0] || null;
-};
-
-
+const { normalizeImage } = require('../utility/imageUtil');
+const moment = require('moment');
+const normalizeDateToStandard = (dateString) => {
+    if (!dateString) return null;
+    return moment(dateString).format('DD-MM-YYYY')
+}
+const normalizeGender =(value) => {
+        if (!value) return null;
+        const lower = value.toLowerCase();
+        return lower === 'm' ? 'Male' : lower === 'f' ? 'Female' : null;
+      }
+const extractFirstName = (givenNames) => givenNames ? givenNames.split(' ')[0] || null : null;
 const extractMiddleName = (givenNames) => {
   if (!givenNames) return null;
-  const names = givenNames.trim().split(" ");
-  return names.length > 1 ? names.slice(1).join(' ') : null;
+  const parts = givenNames.trim().split(' ');
+  return parts.length > 1 ? parts.slice(1).join(' ') : null;
 };
-
-
-const passportNormalize = async (passportResponse) => {
-  try {
-    console.log('Normalizing Passport response');
-    
-
-    const normalized = {
-      firstName: extractFirstName(passportResponse.givenNames) || null,
-      middleName: extractMiddleName(passportResponse.givenNames) || null,
-      lastName: passportResponse.surname || null,
-      dateOfBirth: normalizeDateToStandard(passportResponse.dateOfBirth) || null,
-      gender: passportResponse.sex || null,
+const documentTypeConfigs = {
+  NIN: {
+    fields: {
+      firstName: 'firstName',
+      middleName: 'middleName',
+      lastName: 'lastName',
+      dateOfBirth: { source: 'dateOfBirth', transform: normalizeDateToStandard },
+      gender: { source: 'gender', transform: normalizeGender },
+      email: 'email',
+      phone: 'phone',
+      address: 'residentialAddress',
+      stateOfOrigin: 'stateOfOrigin',
+      documentNumber: 'ninNumber',
+    },
+    photoField: 'image',
+    documentType: 'NIN',
+  },
+  BVN: {
+    fields: {
+      firstName: 'first_name',
+      middleName: 'middle_name',
+      lastName: 'last_name',
+      dateOfBirth: { source: 'date_of_birth', transform: normalizeDateToStandard },
+      gender: { source: 'gender', transform: normalizeGender },
+      email: 'email_address',
+      phone: 'phone_number',
+      address: null,
+      stateOfOrigin: null,
+      documentNumber: 'bvn_number',
+    },
+    photoField: 'photograph',
+    documentType: 'BVN',
+  },
+  DRIVERS_LICENSE: {
+    fields: {
+      firstName: 'FirstName',
+      middleName: 'MiddleName',
+      lastName: 'LastName',
+      dateOfBirth: { source: 'BirthDate', transform: normalizeDateToStandard },
+      gender: { source: 'Gen', transform: normalizeGender },
+      email: null,
+      phone: null,
+      address: 'ResidentialAddr',
+      stateOfOrigin: 'StateOfIssue',
+      documentNumber: 'LicenseNo',
+    },
+    photoField: 'PhotoBase64',
+    documentType: 'DRIVERS_LICENSE',
+  },
+  PASSPORT: {
+    fields: {
+      firstName: { source: 'givenNames', transform: extractFirstName },
+      middleName: { source: 'givenNames', transform: extractMiddleName },
+      lastName: 'surname',
+      dateOfBirth: { source: 'dateOfBirth', transform: normalizeDateToStandard },
+      gender: 'sex',
       email: null,
       phone: null,
       address: null,
       stateOfOrigin: null,
-      
-      documentNumber: passportResponse.passportNumber || null,
-      documentType: 'PASSPORT',
-      
-
-      photo: await normalizeImageField(passportResponse.photo, 'PASSPORT'),
-      
-      verifiedAt: getCurrentTimestamp(),
-      status: 'success'
-    };
-    
-    if (passportResponse.photo && !normalized.photo) {
-      normalized.status = 'partial';
-      console.log('Passport photo fetch/conversion failed, returning partial status');
-    }
-    
-    console.log('Passport normalization complete', { 
-      status: normalized.status,
-      photoFetched: !!normalized.photo
-    });
-    
-    return normalized;
-    
-  } catch (error) {
-    console.log('Error normalizing Passport response', { error: error.message });
-    throw new Error(`Failed to normalize Passport response: ${error.message}`);
+      documentNumber: 'passportNumber',
+    },
+    photoField: 'photo',
+    documentType: 'PASSPORT',
   }
 };
+const normalizeDocument = async (documentType, response) => {
+  try {
+    console.log(`Normalizing ${documentType} response`);
 
-module.exports = {
-  bvnNormalize, 
-  ninNormalize,
-  licenseNormalize,
-  passportNormalize
+    const config = documentTypeConfigs[documentType];
+    if (!config) {
+      throw new Error(`Unsupported document type: ${documentType}`);
+    }
+
+    const normalized = {
+      firstName: null,
+      middleName: null,
+      lastName: null,
+      dateOfBirth: null,
+      gender: null,
+      email: null,
+      phone: null,
+      address: null,
+      stateOfOrigin: null,
+      documentNumber: null,
+      documentType: config.documentType,
+      photo: null,
+    };
+
+    // Map fields using config
+    for (const [targetField, sourceDef] of Object.entries(config.fields)) {
+      if (sourceDef === null) {
+        normalized[targetField] = null;
+        continue;
+      }
+
+      let sourceKey, transform;
+      if (typeof sourceDef === 'string') {
+        sourceKey = sourceDef;
+        transform = null;
+      } else {
+        sourceKey = sourceDef.source;
+        transform = sourceDef.transform;
+      }
+
+      let value = response[sourceKey] !== undefined ? response[sourceKey] : null;
+
+      if (transform && value !== null) {
+        try {
+          value = transform(value);
+        } catch (err) {
+          console.log(`Transform failed for ${targetField}`, { error: err.message });
+          value = null;
+        }
+      }
+
+      normalized[targetField] = value;
+    }
+
+    // Handle photo
+    const photoField = config.photoField;
+    if (photoField && response[photoField]) {
+      try {
+        normalized.photo = await normalizeImage(response[photoField]);
+      } catch (err) {
+        console.log(`Photo normalization failed for ${documentType}`, { error: err.message });
+        normalized.photo = null;
+      }
+    }
+
+    console.log(`${documentType} normalization complete`);
+    return normalized;
+  } catch (error) {
+    console.log(`Error normalizing ${documentType} response`, { error: error.message });
+  }
 };
+module.exports = { normalizeDocument };
