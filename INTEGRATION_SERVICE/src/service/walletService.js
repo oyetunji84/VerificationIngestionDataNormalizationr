@@ -70,31 +70,28 @@ const fundWallet = async ({ amountInKobo, companyId, requestId }) => {
       throw new NotFoundError("wallet", { companyId });
     }
 
-    const balanceBefore = wallet.balance;
-    const balanceAfter = balanceBefore + amountInKobo;
+   const [transaction] = await tx
+  .insert(walletTransactions)
+  .values({
+    id: uuidv4(),
+    walletId: wallet.id,
+    requestId,
+    type: "DEBIT",
+    amount: amountInKobo,
+    balanceBefore: wallet.balance,
+    balanceAfter: sql`${wallet.balance} - ${amountInKobo}`,
+    description,
+    reference: uuidv4(),
+  })
+  .returning();
 
-    const [transaction] = await tx
-      .insert(walletTransactions)
-      .values({
-        id: uuidv4(),
-        walletId: wallet.id,
-        requestId,
-        type: "CREDIT",
-        amount: amountInKobo,
-        balanceBefore,
-        balanceAfter,
-        reference: uuidv4(),
-      })
-      .returning();
-
-    await tx
-      .update(wallets)
-      .set({
-        balance: balanceAfter,
-        updatedAt: new Date(),
-      })
-      .where(eq(wallets.id, wallet.id));
-
+await tx
+  .update(wallets)
+  .set({
+    balance: sql`${wallets.balance} - ${amountInKobo}`,
+    updatedAt: new Date(),
+  })
+  .where(eq(wallets.id, wallet.id));
     return { success: true, transaction };
   });
 

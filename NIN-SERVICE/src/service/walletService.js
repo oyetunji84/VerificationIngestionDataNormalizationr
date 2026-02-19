@@ -158,33 +158,30 @@ const debitWallet = async ({
         companyId,
       });
     }
-
-    const balanceBefore = wallet.balance;
-    const balanceAfter = balanceBefore - amountInKobo;
-
     const [transaction] = await tx
-      .insert(walletTransactions)
-      .values({
-        id: uuidv4(),
-        walletId: wallet.id,
-        requestId,
-        type: "DEBIT",
-        amount: amountInKobo,
-        balanceBefore,
-        balanceAfter,
-        description,
-        reference: uuidv4(),
-      })
-      .returning();
+  .insert(walletTransactions)
+  .values({
+    id: uuidv4(),
+    walletId: wallet.id,
+    requestId,
+    type: "DEBIT",
+    amount: amountInKobo,
+    balanceBefore: wallet.balance,
+    balanceAfter: sql`${wallet.balance} - ${amountInKobo}`,
+    description,
+    reference: uuidv4(),
+  })
+  .returning();
 
-    await tx
-      .update(wallets)
-      .set({
-        balance: balanceAfter,
-        updatedAt: new Date(),
-      })
-      .where(eq(wallets.id, wallet.id));
+await tx
+  .update(wallets)
+  .set({
+    balance: sql`${wallets.balance} - ${amountInKobo}`,
+    updatedAt: new Date(),
+  })
+  .where(eq(wallets.id, wallet.id));
 
+    
     console.log("Wallet debited successfully");
     return { success: true, transaction };
   });
