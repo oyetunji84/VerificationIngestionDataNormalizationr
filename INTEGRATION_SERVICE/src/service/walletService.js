@@ -31,8 +31,41 @@ const getBalance = async (companyId) => {
     companyId: wallet.companyId,
   };
 };
+const createWallet = async (companyId) => {
+  console.log("Creating wallet for company", { companyId });
 
-const fundWallet = async ({ amountInKobo, companyId, requestId }) => {
+  const [existing] = await db
+    .select()
+    .from(wallets)
+    .where(eq(wallets.companyId, companyId))
+    .limit(1);
+
+  if (existing) {
+    console.log("Wallet already exists for company", { companyId });
+    return existing;
+  }
+
+  const [wallet] = await db
+    .insert(wallets)
+    .values({
+      id: uuidv4(),
+      companyId,
+      balance: 0,
+      currency: "NGN",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .returning();
+
+  console.log("Wallet created for company", { companyId, wallet });
+  return wallet;
+};
+const fundWallet = async ({
+  amountInKobo,
+  companyId,
+  requestId,
+  description,
+}) => {
   console.log("FUNDING WALLET", { companyId, amountInKobo, requestId });
 
   if (amountInKobo < 0) {
@@ -41,7 +74,12 @@ const fundWallet = async ({ amountInKobo, companyId, requestId }) => {
   const cacheKey = requestId ? `billing:fund:${requestId}` : null;
 
   if (cacheKey) {
+    console.log("Checking cache for fund wallet request", { cacheKey });
     const cacheResult = await redisClient.get(cacheKey);
+    console.log("Cache result for fund wallet request", {
+      cacheKey,
+      cacheResult,
+    });
     if (cacheResult) return JSON.parse(cacheResult);
   }
 
@@ -70,28 +108,28 @@ const fundWallet = async ({ amountInKobo, companyId, requestId }) => {
       throw new NotFoundError("wallet", { companyId });
     }
 
-   const [transaction] = await tx
-  .insert(walletTransactions)
-  .values({
-    id: uuidv4(),
-    walletId: wallet.id,
-    requestId,
-    type: "DEBIT",
-    amount: amountInKobo,
-    balanceBefore: wallet.balance,
-    balanceAfter: sql`${wallet.balance} - ${amountInKobo}`,
-    description,
-    reference: uuidv4(),
-  })
-  .returning();
+    const [transaction] = await tx
+      .insert(walletTransactions)
+      .values({
+        id: uuidv4(),
+        walletId: wallet.id,
+        requestId,
+        type: "CREDIT",
+        amount: amountInKobo,
+        balanceBefore: wallet.balance,
+        balanceAfter: sql`${wallet.balance}::numeric + ${amountInKobo}::numeric`,
+        description,
+        reference: uuidv4(),
+      })
+      .returning();
 
-await tx
-  .update(wallets)
-  .set({
-    balance: sql`${wallets.balance} - ${amountInKobo}`,
-    updatedAt: new Date(),
-  })
-  .where(eq(wallets.id, wallet.id));
+    await tx
+      .update(wallets)
+      .set({
+        balance: sql`${wallets.balance}::numeric + ${amountInKobo}::numeric`,
+        updatedAt: new Date(),
+      })
+      .where(eq(wallets.id, wallet.id));
     return { success: true, transaction };
   });
 
@@ -105,16 +143,16 @@ await tx
 
 const debitWallet = async ({
   amountInKobo,
-  requestId,
+  idempotencyKey,
   companyId,
   description = "NIN verification request",
 }) => {
-  console.log("Debiting wallet", { companyId, amountInKobo, requestId });
+  console.log("Debiting wallet", { companyId, amountInKobo, idempotencyKey });
 
   if (amountInKobo < 0) {
     throw new ValidationError("Amount cannot be negative", { amountInKobo });
   }
-  const cacheKey = requestId ? `billing:debit:${requestId}` : null;
+  const cacheKey = idempotencyKey ? `billing:debit:${idempotencyKey}` : null;
 
   if (cacheKey) {
     const cacheResult = await redisClient.get(cacheKey);
@@ -122,11 +160,11 @@ const debitWallet = async ({
   }
 
   const result = await db.transaction(async (tx) => {
-    if (requestId) {
+    if (idempotencyKey) {
       const [existing] = await tx
         .select()
         .from(walletTransactions)
-        .where(eq(walletTransactions.requestId, requestId))
+        .where(eq(walletTransactions.requestId, idempotencyKey))
         .limit(1);
 
       if (existing) {
@@ -142,7 +180,7 @@ const debitWallet = async ({
       .where(eq(wallets.companyId, companyId))
       .for("no key update")
       .limit(1);
-
+    console.log("Wallet found for debit", { wallet });
     if (!wallet) {
       console.log("wallet does not exist");
       throw new NotFoundError("wallet", { companyId });
@@ -152,33 +190,33 @@ const debitWallet = async ({
       console.log("Insufficient funds for debit");
       throw new InsufficientFundsError("Insufficient funds", {
         required: amountInKobo,
-        available: wallet.balance,
+        available: wallet.balance / 100,
         companyId,
       });
     }
 
-const [transaction] = await tx
-  .insert(walletTransactions)
-  .values({
-    id: uuidv4(),
-    walletId: wallet.id,
-    requestId,
-    type: "DEBIT",
-    amount: amountInKobo,
-    balanceBefore: wallet.balance,
-    balanceAfter: sql`${wallet.balance} - ${amountInKobo}`,
-    description,
-    reference: uuidv4(),
-  })
-  .returning();
+    const [transaction] = await tx
+      .insert(walletTransactions)
+      .values({
+        id: uuidv4(),
+        walletId: wallet.id,
+        requestId: idempotencyKey,
+        type: "DEBIT",
+        amount: amountInKobo,
+        balanceBefore: wallet.balance,
+        balanceAfter: sql`${wallet.balance}::numeric - ${amountInKobo}::numeric`,
+        description,
+        reference: uuidv4(),
+      })
+      .returning();
 
-await tx
-  .update(wallets)
-  .set({
-    balance: sql`${wallets.balance} - ${amountInKobo}`,
-    updatedAt: new Date(),
-  })
-  .where(eq(wallets.id, wallet.id));
+    await tx
+      .update(wallets)
+      .set({
+        balance: sql`${wallets.balance}::numeric - ${amountInKobo}::numeric`,
+        updatedAt: new Date(),
+      })
+      .where(eq(wallets.id, wallet.id));
 
     console.log("Wallet debited successfully");
     return { success: true, transaction };
@@ -229,6 +267,7 @@ const getWalletHistory = async ({ companyId, limit, offset }) => {
 };
 
 module.exports = {
+  createWallet,
   getBalance,
   fundWallet,
   debitWallet,

@@ -1,7 +1,7 @@
 class AppError extends Error {
   constructor(message, statusCode, isOperational = true, metadata = {}) {
     super(message);
-
+    this.message = message;
     this.statusCode = statusCode;
     this.isOperational = isOperational;
     this.metadata = metadata;
@@ -40,11 +40,11 @@ class DatabaseError extends AppError {
 }
 
 class RateLimitExceededError extends AppError {
-    constructor(message = 'Rate limit exceeded', metadata = {}) {
-      super(message, 429, true, metadata);
-      this.name = 'RateLimitExceededError';
-    }
+  constructor(message = "Rate limit exceeded", metadata = {}) {
+    super(message, 429, true, metadata);
+    this.name = "RateLimitExceededError";
   }
+}
 
 class ExternalServiceError extends AppError {
   constructor(service, message, metadata = {}) {
@@ -54,8 +54,8 @@ class ExternalServiceError extends AppError {
 }
 
 class InsufficientFundsError extends AppError {
-  constructor(service, message, metadata = {}) {
-    super(`.${message}`, 402, true, metadata);
+  constructor(message, metadata = {}) {
+    super(message, 402, true, metadata);
   }
 }
 
@@ -65,12 +65,12 @@ const asyncHandler = (fn) => (req, res, next) => {
 
 module.exports = {
   InsufficientFundsError,
-   asyncHandler,
+  asyncHandler,
   AppError,
   ValidationError,
   NotFoundError,
   UnauthorizedError,
   DatabaseError,
   ExternalServiceError,
-  RateLimitExceededError
+  RateLimitExceededError,
 };

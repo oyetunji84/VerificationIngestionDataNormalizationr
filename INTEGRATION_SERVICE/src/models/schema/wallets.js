@@ -10,7 +10,7 @@ const { sql } = require("drizzle-orm");
 
 const wallets = pgTable("wallets", {
   id: uuid("id").primaryKey().defaultRandom(),
-  companyId: uuid("company_id").notNull(),
+  companyId: varchar("company_id", { length: 255 }).notNull().unique(),
   currency: varchar("currency", { length: 3 }).notNull().default("NGN"),
   balance: integer("balance").notNull().default(0),
   status: varchar("status", { length: 20 }).notNull().default("ACTIVE"),

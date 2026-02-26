@@ -18,6 +18,7 @@ const walletTransactions = pgTable("wallet_transactions", {
   amount: integer("amount").notNull(),
   reference: varchar("reference", { length: 100 }),
   status: varchar("status", { length: 20 }),
+  description: varchar("description", { length: 255 }),
   createdAt: timestamp("created_at")
     .notNull()
     .default(sql`now()`),

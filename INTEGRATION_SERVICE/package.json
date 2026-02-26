@@ -11,10 +11,12 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "amqplib": "^0.10.9",
     "axios": "^1.13.4",
     "axios-retry": "^4.5.0",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
+    "drizzle-kit": "^0.31.9",
     "drizzle-orm": "^0.45.1",
     "express": "^5.2.1",
     "joi": "^18.0.2",

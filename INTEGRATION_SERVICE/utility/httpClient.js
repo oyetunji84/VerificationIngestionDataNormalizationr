@@ -1,6 +1,6 @@
 const axios = require("axios");
 const axiosRetry = require("axios-retry");
-const { v4: uuidv4 } = require('uuid')
+const { v4: uuidv4 } = require("uuid");
 class HttpClient {
   constructor(baseURL, options = {}) {
     this.client = axios.create({
@@ -8,12 +8,13 @@ class HttpClient {
       timeout: options.timeout || 10000,
       headers: {
         "Content-Type": "application/json",
+        "x-api-key": process.env.API_KEY,
         ...options.headers,
       },
     });
 
     axiosRetry.default(this.client, {
-      retries: options.retries || 3,
+      retries: options.retries || 0,
       retryDelay: axiosRetry.exponentialDelay,
       retryCondition: (error) => {
         return (
