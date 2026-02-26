@@ -6,5 +6,8 @@ const verifyLicenseSchema = Joi.object({
     "string.max": "License number cannot exceed 15 characters",
     "any.required": "License number is required",
   }),
+  callBackUrl: Joi.string().uri().optional().messages({
+    "string.uri": "Call back URL must be a valid URI",
+  }),
 });
 module.exports = verifyLicenseSchema;

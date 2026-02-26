@@ -1,37 +1,39 @@
-const validate = (schema, source = 'body') => {
+const validate = (schema, source = "body") => {
   return (req, res, next) => {
+    if (!schema) {
+      console.log(schema);
+    }
     const dataToValidate = req[source];
-    
+    console.log(dataToValidate);
     const { error, value } = schema.validate(dataToValidate, {
       abortEarly: false,
-      stripUnknown: true
+      stripUnknown: true,
     });
-    
+    console.log(value, error);
     if (error) {
-      const errorMessages = error.details.map(detail => ({
-        field: detail.path.join('.'),
-        message: detail.message
+      const errorMessages = error.details.map((detail) => ({
+        field: detail.path.join("."),
+        message: detail.message,
       }));
-      
-      console.log('Validation error', { 
+
+      console.log("Validation error", {
         path: req.path,
-        errors: errorMessages 
+        errors: errorMessages,
       });
-      
+
       return res.status(400).json({
         success: false,
         error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Invalid request data',
-          details: errorMessages
-        }
+          code: "VALIDATION_ERROR",
+          message: "Invalid request data",
+          details: errorMessages,
+        },
       });
     }
-    
-   
+
     req[source] = value;
     req.validatedData = value;
-    
+
     next();
   };
 };

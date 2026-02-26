@@ -63,4 +63,32 @@ async function setupQueues() {
   console.log("RabbitMQ topology ready");
 }
 
-module.exports = { TOPOLOGY, setupQueues };
+const publishToQueue = (data) => {
+  if (!channel) {
+    console.error("RabbitMQ channel is not available.");
+    return;
+  }
+  console.log("[DEBUG] Publishing to exchange...");
+  const result = channel.publish(
+    TOPOLOGY.JOBEXCHANGE,
+    TOPOLOGY.ROUTING_KEYS.MAIN,
+    Buffer.from(JSON.stringify(data)),
+    { persistent: true },
+  );
+  console.log(`[DEBUG] Published to exchange. Result: ${result}`);
+};
+
+const publishToRetryQueue = (data, delayMs) => {
+  if (!channel) {
+    console.error("RabbitMQ channel is not available.");
+    return;
+  }
+  channel.publish(
+    TOPOLOGY.JOBEXCHANGE,
+    TOPOLOGY.ROUTING_KEYS.RETRY,
+    Buffer.from(JSON.stringify(data)),
+    { persistent: true, expiration: delayMs.toString() },
+  );
+};
+
+module.exports = { TOPOLOGY, setupQueues, publishToQueue, publishToRetryQueue };

@@ -10,6 +10,9 @@ const verifyBVNSchema = Joi.object({
       "string.pattern.base": "BVN must contain only numbers",
       "any.required": "BVN is required",
     }),
+  callBackUrl: Joi.string().uri().optional().messages({
+    "string.uri": "Call back URL must be a valid URI",
+  }),
 });
 
 module.exports = verifyBVNSchema;

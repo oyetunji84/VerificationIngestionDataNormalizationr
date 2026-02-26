@@ -5,6 +5,7 @@ const licenseClient = require("../service/licenseService");
 const passportClient = require("../service/passportService");
 
 const { asyncHandler } = require("../../utility/error");
+const { getVerificationResult } = require("../service/verificationService");
 
 const verifyNIN = asyncHandler(async (req, res, next) => {
   // Idempotency key
@@ -123,10 +124,14 @@ const getVerificationStatus = asyncHandler(async (req, res, next) => {
     requestId: id,
     companyId,
   });
-
+  const statusData = await getVerificationResult(id, companyId);
+  console.log("Verification status retrieved", {
+    requestId: id,
+    companyId,
+    status: statusData,
+  });
   return res.status(200).json({
     success: true,
-    message: "Verification status retrieved",
     data: statusData,
   });
 });
@@ -136,4 +141,5 @@ module.exports = {
   verifyBVN,
   verifyLicense,
   verifyPassport,
+  getVerificationStatus,
 };

@@ -113,7 +113,12 @@ const paidVerifyNin = async (params) => {
     }
 
     console.log("Created background job for NIN verification", { job });
-    await publishJob(job.id, { nin, idempotencyKey, route: job.route });
+    await publishJob(job.id, {
+      nin,
+      idempotencyKey,
+      route: job.route,
+      callBackUrl: `${process.env.GATEWAY_BASE_URL}/api/verify/webhook/gov-provider`,
+    });
 
     if (idempotencyKey) {
       await redisClient.set(

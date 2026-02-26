@@ -82,6 +82,13 @@ const registerCompanySchema = Joi.object({
   }),
 });
 
+const paramsVerificationSchema = Joi.object({
+  id: Joi.string().hex().length(24).required().messages({
+    "string.hex": "ID must be a hexadecimal string",
+    "string.length": "ID must be exactly 24 characters long",
+    "any.required": "ID is required",
+  }),
+});
 module.exports = {
   registerCompanySchema,
   verifyNINSchema,
@@ -91,4 +98,5 @@ module.exports = {
   walletHistoryQuerySchema,
   verifyPassportSchema,
   historyFiltersSchema,
+  paramsVerificationSchema,
 };

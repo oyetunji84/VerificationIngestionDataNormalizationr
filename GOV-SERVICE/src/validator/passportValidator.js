@@ -7,5 +7,8 @@ const verifyPassportSchema = Joi.object({
     "string.alphanum": "Passport number must be alphanumeric",
     "any.required": "Passport number is required",
   }),
+  callBackUrl: Joi.string().uri().optional().messages({
+    "string.uri": "Call back URL must be a valid URI",
+  }),
 });
 module.exports = verifyPassportSchema;

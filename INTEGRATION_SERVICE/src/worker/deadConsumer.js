@@ -1,5 +1,5 @@
 require("dotenv").config();
-console.log(process.env);
+
 const { getChannel } = require("../infra/raddbitmq");
 const { TOPOLOGY } = require("../infra/setUpQueue");
 const { logVerification } = require("../service/historyService");

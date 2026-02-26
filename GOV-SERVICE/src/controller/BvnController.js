@@ -1,14 +1,17 @@
 const GetBvnService = require("../service/BvnService");
 const { asyncHandler, NotFoundError } = require("../Utility/error");
-
+const { publishToQueue } = require("../infra/setUpQueue");
 const verifyBVN = asyncHandler(async (req, res, next) => {
-  const { bvn } = req.validatedData;
-  const record = await GetBvnService(bvn);
+  const { bvn, callBackUrl } = req.validatedData;
 
-  return res.status(200).json({
+  // const record = await GetBvnService(bvn);
+
+  publishToQueue({ bvn, callBackUrl });
+
+  return res.status(202).json({
     success: true,
     data: {
-      ...record,
+      message: "Its being processed",
     },
   });
 });

@@ -1,4 +1,6 @@
 const express = require("express");
+const webhookController = require("../controller/webhookController");
+
 const router = express.Router();
 const verificationController = require("../controller/verificationController");
 const apiKeyAuth = require("../middlewares/apiKeyMiddleware");
@@ -9,6 +11,7 @@ const {
   verifyBVNSchema,
   verifyLicenseSchema,
   verifyPassportSchema,
+  paramsVerificationSchema,
 } = require("../validators/validator");
 
 router.post(
@@ -43,12 +46,13 @@ router.post(
   rateLimitMiddleware(),
   verificationController.verifyPassport,
 );
-router.post(
+
+router.get(
   "/verification/:id",
   apiKeyAuth,
-  validate(),
+  validate(paramsVerificationSchema, "params"),
   verificationController.getVerificationStatus,
 );
 
-router.get("/");
+router.post("/gov-provider", webhookController.handleGovProviderWebhook);
 module.exports = router;
