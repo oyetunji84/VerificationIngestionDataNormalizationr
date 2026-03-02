@@ -1,7 +1,7 @@
-const mongoose =require("mongoose");
+const mongoose = require("mongoose");
 
 const jobSchema = new mongoose.Schema({
-callbackUrl: {
+  callbackUrl: {
     type: String,
     required: true,
   },
@@ -13,7 +13,7 @@ callbackUrl: {
     type: String,
     required: true,
   },
-    type: {
+  type: {
     type: String,
     enum: ["NIN", "BVN", "DRIVERS_LICENSE", "PASSPORT"],
     required: true,
@@ -28,6 +28,9 @@ callbackUrl: {
     default: "pending",
   },
   payload: {
+    type: mongoose.Schema.Types.Mixed,
+  },
+  meta: {
     type: mongoose.Schema.Types.Mixed,
   },
   retry_count: {

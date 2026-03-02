@@ -19,8 +19,8 @@ class ValidationError extends AppError {
 }
 
 class NotFoundError extends AppError {
-  constructor(resource, metadata = {}) {
-    super(`${resource} not found`, 404, true, metadata);
+  constructor(message, metadata = {}) {
+    super(message, 404, true, metadata);
     this.name = "NotFoundError";
   }
 }
@@ -47,17 +47,17 @@ class ExternalServiceError extends AppError {
 }
 
 class InsufficientFundsError extends AppError {
-  constructor(service, message, metadata = {}) {
+  constructor(message = "Insufficient funds", metadata = {}) {
     super(`.${message}`, 402, true, metadata);
   }
 }
-class ProviderInsufficientFundsError extends AppError {
-  constructor(provider, message, metadata = {}) {
-    super(`Provider insufficient funds: ${message}`, 503, true, metadata);
-    this.name = "ProviderInsufficientFundsError";
-    this.provider = provider;
-  }
-}
+// class ProviderInsufficientFundsError extends AppError {
+//   constructor(provider, message, metadata = {}) {
+//     super(`Provider insufficient funds: ${message}`, 503, true, metadata);
+//     this.name = "ProviderInsufficientFundsError";
+//     this.provider = provider;
+//   }
+// }
 
 class RateLimitExceededError extends AppError {
   constructor(message = "Rate limit exceeded", metadata = {}) {

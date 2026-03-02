@@ -18,21 +18,21 @@ const TOPOLOGY = {
 };
 
 async function setupQueues() {
-   let channel;
+  let channel;
 
-   try {
-     channel = await getChannel();
-   } catch (err) {
-     console.warn(
-       "Failed to get RabbitMQ channel, retrying in 5 seconds...",
-       err.message,
-     );
-     await new Promise((res) => setTimeout(res, 5000));
-     return setupQueues();
-   }
+  try {
+    channel = await getChannel();
+  } catch (err) {
+    console.warn(
+      "Failed to get RabbitMQ channel, retrying in 5 seconds...",
+      err.message,
+    );
+    await new Promise((res) => setTimeout(res, 5000));
+    return setupQueues();
+  }
   try {
     console.log("Setting up RabbitMQ topology in Gov-service...");
-   
+
     await channel.assertExchange(TOPOLOGY.JOBEXCHANGE, "direct", {
       durable: true,
     });
@@ -81,10 +81,7 @@ async function setupQueues() {
 
     console.log("RabbitMQ topology ready in Gov-service");
   } catch (err) {
-    console.error(
-      "Failed to setup RabbitMQ topology in Gov-service",
-      err,
-    );
+    console.error("Failed to setup RabbitMQ topology in Gov-service", err);
     throw err;
   }
 }
@@ -92,18 +89,18 @@ async function setupQueues() {
 async function publishWithConfirm(routingKey, content, options = {}) {
   let channel;
 
-   try {
-     channel = await getChannel();
-   } catch (err) {
-     console.warn(
-       "Failed to get RabbitMQ channel, retrying in 5 seconds...",
-       err.message,
-     );
-     await new Promise((res) => setTimeout(res, 5000));
-     return publishWithConfirm(routingKey, content, options);
-   }
+  try {
+    channel = await getChannel();
+  } catch (err) {
+    console.warn(
+      "Failed to get RabbitMQ channel, retrying in 5 seconds...",
+      err.message,
+    );
+    await new Promise((res) => setTimeout(res, 5000));
+    return publishWithConfirm(routingKey, content, options);
+  }
 
-  return await new Promise( (resolve, reject) => {
+  return await new Promise((resolve, reject) => {
     try {
       const bufferHasRoom = channel.publish(
         TOPOLOGY.JOBEXCHANGE,
@@ -117,9 +114,7 @@ async function publishWithConfirm(routingKey, content, options = {}) {
         (err) => {
           if (err) {
             console.error("[AMQP] publish error", err);
-            return reject(
-              new Error(`Broker rejected message: ${err.message}`),
-            );
+            return reject(new Error(`Broker rejected message: ${err.message}`));
           }
           resolve();
         },
@@ -130,9 +125,7 @@ async function publishWithConfirm(routingKey, content, options = {}) {
           "write buffer full — waiting for drain before next publish",
         );
         channel.once("drain", () => {
-          console.log(
-            "buffer drained — safe to continue publishing",
-          );
+          console.log("buffer drained — safe to continue publishing");
         });
       }
     } catch (err) {
@@ -142,9 +135,10 @@ async function publishWithConfirm(routingKey, content, options = {}) {
   });
 }
 
-async function publishToMainQueue(jobId, payload, retryCount = 0) {
+async function publishToMainQueue(jobId, payload, retryCount) {
+  console.log("Publishing to main queue with payload:", payload);
   const message = JSON.stringify({ jobId, payload, retryCount });
-
+  console.log("Publishing to main queue:", message);
   await publishWithConfirm(TOPOLOGY.ROUTING_KEYS.MAIN, message, {
     messageId: jobId,
   });
@@ -153,8 +147,7 @@ async function publishToMainQueue(jobId, payload, retryCount = 0) {
 }
 
 async function publishToRetryQueue(jobId, payload, retryCount) {
-  const backoffMs =
-    TOPOLOGY.RETRY_BASE_DELAY_MS * Math.pow(2, retryCount);
+  const backoffMs = TOPOLOGY.RETRY_BASE_DELAY_MS * Math.pow(2, retryCount);
   const message = JSON.stringify({ jobId, payload, retryCount });
 
   await publishWithConfirm(TOPOLOGY.ROUTING_KEYS.RETRY, message, {

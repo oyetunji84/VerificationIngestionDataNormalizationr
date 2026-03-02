@@ -1,7 +1,7 @@
 const { asyncHandler } = require("../utility/error");
 const { findJobById, createJob } = require("../repository/jobRepository");
 const { publishToMainQueue } = require("../infra/setUpQueue");
-
+const { v4: uuidv4 } = require("uuid");
 const verifyBvnController = asyncHandler(async (req, res) => {
   const { id, callbackUrl, bvn } = req.validatedData;
   const companyId = req.company?.id;
@@ -45,7 +45,7 @@ const verifyBvnController = asyncHandler(async (req, res) => {
     idempotencyKey: requestId,
     retryCount,
   };
-  await publishToMainQueue(id, payload, 0);
+  await publishToMainQueue(id, payload);
 
   return res.status(202).json({
     success: true,
