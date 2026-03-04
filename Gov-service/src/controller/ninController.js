@@ -1,24 +1,59 @@
 const { asyncHandler } = require("../utility/error");
-const { verifyNin } = require("../services/NinService");
+const { findJobById, createJob } = require("../repository/jobRepository");
+const { publishToMainQueue } = require("../infra/setUpQueue");
 const { v4: uuidv4 } = require("uuid");
 
 const verifyNinController = asyncHandler(async (req, res) => {
+  const { id, callbackUrl, nin } = req.validatedData;
   const companyId = req.company?.id;
   const requestId =
     req.header("x-idempotency-key") ||
     req.header("X-IDEMPOTENCY-KEY") ||
     uuidv4();
 
-  const { nin } = req.validatedData;
+  const existingJob = await findJobById(id);
+  if (existingJob) {
+    return res.status(202).json({
+      success: true,
+      data: { id: existingJob.UserId, status: existingJob.status },
+      message: "Request already accepted",
+    });
+  }
 
-  const { status, record } = await verifyNin(nin, companyId, requestId);
+  const {
+    _id: jobId,
+    UserId,
+    callbackUrl: jobCallbackUrl,
+    retry_count: retryCount,
+  } = await createJob({
+    UserId: id,
+    callbackUrl,
+    companyId,
+    type: "NIN",
+    IdempotencyKey: requestId,
+    status: "pending",
+    payload: { nin, callbackUrl, id },
+    retry_count: 0,
+  });
 
-  return res.status(200).json({
-    success: status,
-    data: record,
-    requestId,
+  const payload = {
+    dbId: jobId,
+    id: UserId,
+    callbackUrl: jobCallbackUrl,
+    companyId,
+    digit: nin,
+    type: "NIN",
+    IdempotencyKey: requestId,
+    retryCount,
+  };
+
+  await publishToMainQueue(id, payload);
+
+  return res.status(202).json({
+    success: true,
+    data: { id, status: "pending" },
+    message: "Request accepted",
   });
 });
 
 module.exports = { verifyNinController };
-

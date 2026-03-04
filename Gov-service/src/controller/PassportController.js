@@ -1,28 +1,59 @@
 const { asyncHandler } = require("../utility/error");
-const { verifyPassport } = require("../services/PassPortService");
+const { findJobById, createJob } = require("../repository/jobRepository");
+const { publishToMainQueue } = require("../infra/setUpQueue");
 const { v4: uuidv4 } = require("uuid");
 
 const verifyPassportController = asyncHandler(async (req, res) => {
+  const { id, callbackUrl, passport_number } = req.validatedData;
   const companyId = req.company?.id;
   const requestId =
     req.header("x-idempotency-key") ||
     req.header("X-IDEMPOTENCY-KEY") ||
     uuidv4();
 
-  const { passport_number } = req.validatedData;
+  const existingJob = await findJobById(id);
+  if (existingJob) {
+    return res.status(202).json({
+      success: true,
+      data: { id: existingJob.UserId, status: existingJob.status },
+      message: "Request already accepted",
+    });
+  }
 
-  const { status, record } = await verifyPassport(
-    passport_number,
+  const {
+    _id: jobId,
+    UserId,
+    callbackUrl: jobCallbackUrl,
+    retry_count: retryCount,
+  } = await createJob({
+    UserId: id,
+    callbackUrl,
     companyId,
-    requestId,
-  );
+    type: "PASSPORT",
+    IdempotencyKey: requestId,
+    status: "pending",
+    payload: { passport_number, callbackUrl, id },
+    retry_count: 0,
+  });
 
-  return res.status(200).json({
-    success: status,
-    data: record,
-    requestId,
+  const payload = {
+    dbId: jobId,
+    id: UserId,
+    callbackUrl: jobCallbackUrl,
+    companyId,
+    digit: passport_number,
+    type: "PASSPORT",
+    IdempotencyKey: requestId,
+    retryCount,
+  };
+
+  await publishToMainQueue(id, payload);
+
+  return res.status(202).json({
+    success: true,
+    data: { id, status: "pending" },
+    message: "Request accepted",
   });
 });
 
 module.exports = { verifyPassportController };
-

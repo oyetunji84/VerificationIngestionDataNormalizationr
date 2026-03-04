@@ -14,7 +14,7 @@ const verifyBvnController = asyncHandler(async (req, res) => {
   if (existingJob) {
     return res.status(202).json({
       success: true,
-      data: { id: existingJob.id, status: existingJob.status },
+      data: { id: existingJob.UserId, status: existingJob.status },
       message: "Request already accepted",
     });
   }
@@ -42,7 +42,7 @@ const verifyBvnController = asyncHandler(async (req, res) => {
     companyId,
     digit: bvn,
     type: "BVN",
-    idempotencyKey: requestId,
+    IdempotencyKey: requestId,
     retryCount,
   };
   await publishToMainQueue(id, payload);
