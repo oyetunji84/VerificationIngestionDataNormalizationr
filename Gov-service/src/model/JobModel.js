@@ -15,7 +15,7 @@ const jobSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ["NIN", "BVN", "DRIVERS_LICENSE", "PASSPORT"],
+    enum: ["NIN", "BVN", "LICENSE", "PASSPORT"],
     required: true,
   },
   IdempotencyKey: {

@@ -21,6 +21,7 @@ const VERIFICATION_HANDLERS = {
   BVN: verifyBvn,
   NIN: verifyNin,
   LICENSE: verifyLicense,
+  DRIVERS_LICENSE: verifyLicense,
   PASSPORT: verifyPassport,
 };
 
