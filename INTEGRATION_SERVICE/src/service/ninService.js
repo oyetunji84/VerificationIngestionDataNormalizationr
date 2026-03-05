@@ -2,12 +2,11 @@ const HttpClient = require("../../utility/httpClient");
 const config = require("../../config/environment");
 const { debitWallet } = require("../service/walletService");
 const { logVerification } = require("../service/historyService");
-const { normalizeDocument } = require("../../normalizer/normalizer");
-const JobModel = require("../models/JobModel");
 const { redisClient } = require("../infra/redisDb");
 const NIN_COST_IN_NAIRA = 100;
 const NIN_COST_IN_KOBO = NIN_COST_IN_NAIRA * 100;
 const { publishJob } = require("../worker/publisher");
+const jobRepository = require("../repository/jobRepository");
 const {
   NotFoundError,
   UnauthorizedError,
@@ -15,6 +14,8 @@ const {
   ExternalServiceError,
 } = require("../../utility/error");
 const { cacheHitCounter, cacheMissCounter } = require("../infra/observe");
+const { toTraceHeaders } = require("../infra/traceContext");
+
 const ninHttpClient = new HttpClient(config.NIN_PROVIDER_URL, {
   providerName: "NIN Provider",
   onError: (error) => {
@@ -54,6 +55,7 @@ const ninHttpClient = new HttpClient(config.NIN_PROVIDER_URL, {
     }
   },
 });
+
 const verifyNIN = async (nin) => {
   console.log("Calling NIN provider", { nin });
 
@@ -67,82 +69,94 @@ const verifyNIN = async (nin) => {
 };
 
 const paidVerifyNin = async (params) => {
-  const { idempotencyKey, companyId, nin, apiKey } = params;
+  const { idempotencyKey, companyId, nin, apiKey, traceId, traceparent } =
+    params;
+
   console.log("Starting paid NIN verification", {
     nin,
     companyId,
     idempotencyKey,
   });
+
   try {
-    if (idempotencyKey) {
-      const cacheResult = await redisClient.get(
-        `IDEMPOTENCY:${idempotencyKey}`,
-      );
-      if (cacheResult) {
-        console.log("Cache hit for idempotency key", { idempotencyKey });
-        return JSON.parse(cacheResult);
-      }
-    }
     const debitResult = await debitWallet({
       amountInKobo: NIN_COST_IN_KOBO,
       idempotencyKey,
       companyId,
       description: "NIN verification request",
     });
-    const job = await JobModel.create({
+
+    const job = await jobRepository.createJob({
       status: "pending",
       IdempotencyKey: idempotencyKey,
       route: "/verify/NIN",
       payload: { nin, idempotencyKey },
       companyId,
     });
+
     const cacheKey = nin ? `NIN:${nin}` : null;
     if (cacheKey) {
       const cacheResult = await redisClient.get(cacheKey);
       if (cacheResult) {
-        console.log("cache hitting for NIN verification", { ninNumber: nin });
-
         cacheHitCounter.inc();
-        return await JobModel.findByIdAndUpdate(job._id, {
-          status: "completed",
+        const updatedJob = await jobRepository.updateById(job._id, {
+          status: "success",
           result: JSON.parse(cacheResult),
         });
-      } else {
-        cacheMissCounter.inc();
+        return {
+          data: {
+            status: updatedJob.status,
+            id: updatedJob.id,
+            idempotencyKey: updatedJob.IdempotencyKey,
+          },
+        };
       }
+      cacheMissCounter.inc();
     }
 
-    console.log("Created background job for NIN verification", { job });
-    await publishJob(job.id, {
-      nin,
-      idempotencyKey,
-      route: job.route,
-      callBackUrl: `${process.env.GATEWAY_BASE_URL}/api/verify/webhook/gov-provider`,
-    });
+    await publishJob(
+      job.id,
+      {
+        nin,
+        idempotencyKey,
+        route: job.route,
+        callBackUrl: `${process.env.GATEWAY_BASE_URL}/api/verify/webhook/gov-provider`,
+      },
+      0,
+      toTraceHeaders({ traceId, traceparent }),
+    );
 
     if (idempotencyKey) {
       await redisClient.set(
         `IDEMPOTENCY:${idempotencyKey}`,
-        JSON.stringify({ status: job.status, id: job.id }),
-        {
-          EX: 8400,
-        },
+        JSON.stringify({
+          data: {
+            status: job.status,
+            id: job.id,
+            idempotencyKey: job.IdempotencyKey,
+          },
+        }),
+        { EX: 8400 },
       );
     }
 
-    logVerification({
-      apiKey,
-      serviceType: "NIN",
-      status: "PARTIAL",
-      idempotencyKey,
-      amountInKobo: NIN_COST_IN_KOBO,
-      walletTransactionId: debitResult.transaction.id,
-    }).catch((err) => {
+    logVerification(
+      {
+        apiKey,
+        serviceType: "NIN",
+        status: "PARTIAL",
+        requestId: idempotencyKey,
+        amountInKobo: NIN_COST_IN_KOBO,
+        walletTransactionId: debitResult.transaction.id,
+      },
+      { traceId, traceparent },
+    ).catch((err) => {
       console.error("Failed to log NIN verification", {
-        idempotencyKey,
+        requestId: idempotencyKey,
         error: err.message,
       });
     });
+
     return {
       data: {
         status: job.status,
@@ -151,24 +165,27 @@ const paidVerifyNin = async (params) => {
       },
     };
   } catch (err) {
-    logVerification({
-      apiKey,
-      serviceType: "NIN",
-      status: "FAILED",
-      idempotencyKey,
-      errorMessage: err.message,
-      errorCode: err.code || err.statusCode || "VERIFICATION_ERROR",
-    }).catch((err) => {
+    logVerification(
+      {
+        apiKey,
+        serviceType: "NIN",
+        status: "FAILED",
+        requestId: idempotencyKey,
+        errorMessage: err.message,
+        errorCode: err.code || err.statusCode || "VERIFICATION_ERROR",
+      },
+      { traceId, traceparent },
+    ).catch((logErr) => {
       console.error("Failed to log failed NIN verification", {
-        requestId,
-        error: err.message,
+        requestId: idempotencyKey,
+        error: logErr.message,
       });
     });
-    console.log(err, "at nin service  for paid verifyNIN");
-    // Let asyncHandler + error middleware deal with the response
+
     throw err;
   }
 };
+
 module.exports = {
   paidVerifyNin,
 };

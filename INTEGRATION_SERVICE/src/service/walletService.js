@@ -1,9 +1,6 @@
 const { redisClient } = require("../infra/redisDb");
-const { eq, sql } = require("drizzle-orm");
 const { v4: uuidv4 } = require("uuid");
-const { db } = require("../infra/postgresDb");
-const { wallets } = require("../models/schema/wallets");
-const { walletTransactions } = require("../models/schema/walletTransactions");
+const walletRepository = require("../repository/walletRepository");
 const {
   NotFoundError,
   InsufficientFundsError,
@@ -13,12 +10,7 @@ const {
 const getBalance = async (companyId) => {
   console.log("Getting wallet balance", { companyId });
 
-  const [wallet] = await db
-    .select()
-    .from(wallets)
-    .where(eq(wallets.companyId, companyId))
-    .limit(1);
-
+  const wallet = await walletRepository.findWalletByCompanyId(companyId);
   if (!wallet) {
     throw new NotFoundError("wallet", { companyId });
   }
@@ -31,210 +23,117 @@ const getBalance = async (companyId) => {
     companyId: wallet.companyId,
   };
 };
+
 const createWallet = async (companyId) => {
   console.log("Creating wallet for company", { companyId });
 
-  const [existing] = await db
-    .select()
-    .from(wallets)
-    .where(eq(wallets.companyId, companyId))
-    .limit(1);
-
+  const existing = await walletRepository.findWalletByCompanyId(companyId);
   if (existing) {
     console.log("Wallet already exists for company", { companyId });
     return existing;
   }
 
-  const [wallet] = await db
-    .insert(wallets)
-    .values({
-      id: uuidv4(),
-      companyId,
-      balance: 0,
-      currency: "NGN",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .returning();
+  const wallet = await walletRepository.createWallet({
+    id: uuidv4(),
+    companyId,
+    balance: 0,
+    currency: "NGN",
+  });
 
   console.log("Wallet created for company", { companyId, wallet });
   return wallet;
 };
-const fundWallet = async ({
-  amountInKobo,
-  companyId,
-  requestId,
-  description,
-}) => {
+
+const fundWallet = async ({ amountInKobo, companyId, requestId, description }) => {
   console.log("FUNDING WALLET", { companyId, amountInKobo, requestId });
 
   if (amountInKobo < 0) {
     throw new ValidationError("Amount cannot be negative", { amountInKobo });
   }
-  const cacheKey = requestId ? `billing:fund:${requestId}` : null;
 
+  const cacheKey = requestId ? `billing:fund:${requestId}` : null;
   if (cacheKey) {
-    console.log("Checking cache for fund wallet request", { cacheKey });
     const cacheResult = await redisClient.get(cacheKey);
-    console.log("Cache result for fund wallet request", {
-      cacheKey,
-      cacheResult,
-    });
     if (cacheResult) return JSON.parse(cacheResult);
   }
 
-  const result = await db.transaction(async (tx) => {
-    if (requestId) {
-      const [existing] = await tx
-        .select()
-        .from(walletTransactions)
-        .where(eq(walletTransactions.requestId, requestId))
-        .limit(1);
-
-      if (existing) {
-        console.log("Found existing transaction inside transaction block");
-        return { success: true, transaction: existing };
-      }
-    }
-    const [wallet] = await tx
-      .select()
-      .from(wallets)
-      .where(eq(wallets.companyId, companyId))
-      .for("no key update")
-      .limit(1);
-
-    if (!wallet) {
-      console.log("wallet not found");
-      throw new NotFoundError("wallet", { companyId });
-    }
-
-    const [transaction] = await tx
-      .insert(walletTransactions)
-      .values({
-        id: uuidv4(),
-        walletId: wallet.id,
-        requestId,
-        type: "CREDIT",
-        amount: amountInKobo,
-        balanceBefore: wallet.balance,
-        balanceAfter: sql`${wallet.balance}::numeric + ${amountInKobo}::numeric`,
-        description,
-        reference: uuidv4(),
-      })
-      .returning();
-
-    await tx
-      .update(wallets)
-      .set({
-        balance: sql`${wallets.balance}::numeric + ${amountInKobo}::numeric`,
-        updatedAt: new Date(),
-      })
-      .where(eq(wallets.id, wallet.id));
-    return { success: true, transaction };
+  const result = await walletRepository.createCreditTransactionAndUpdateBalance({
+    companyId,
+    amountInKobo,
+    requestId,
+    description,
   });
 
-  if (cacheKey) {
-    await redisClient.set(cacheKey, JSON.stringify(result), { EX: 8400 });
+  if (!result.wallet && !result.alreadyProcessed) {
+    throw new NotFoundError("wallet", { companyId });
   }
 
-  console.log("Wallet funded successfully");
-  return result;
+  const payload = { success: true, transaction: result.transaction };
+
+  if (cacheKey) {
+    await redisClient.set(cacheKey, JSON.stringify(payload), { EX: 8400 });
+  }
+
+  return payload;
 };
 
 const debitWallet = async ({
   amountInKobo,
   idempotencyKey,
+  requestId,
   companyId,
   description = "NIN verification request",
 }) => {
-  console.log("Debiting wallet", { companyId, amountInKobo, idempotencyKey });
+  const effectiveRequestId = idempotencyKey || requestId;
+
+  console.log("Debiting wallet", {
+    companyId,
+    amountInKobo,
+    requestId: effectiveRequestId,
+  });
 
   if (amountInKobo < 0) {
     throw new ValidationError("Amount cannot be negative", { amountInKobo });
   }
-  const cacheKey = idempotencyKey ? `billing:debit:${idempotencyKey}` : null;
 
+  const cacheKey = effectiveRequestId
+    ? `billing:debit:${effectiveRequestId}`
+    : null;
   if (cacheKey) {
     const cacheResult = await redisClient.get(cacheKey);
     if (cacheResult) return JSON.parse(cacheResult);
   }
 
-  const result = await db.transaction(async (tx) => {
-    if (idempotencyKey) {
-      const [existing] = await tx
-        .select()
-        .from(walletTransactions)
-        .where(eq(walletTransactions.requestId, idempotencyKey))
-        .limit(1);
-
-      if (existing) {
-        console.log(
-          "Idempotent debit request - returning existing transaction",
-        );
-        return { success: true, transaction: existing };
-      }
-    }
-    const [wallet] = await tx
-      .select()
-      .from(wallets)
-      .where(eq(wallets.companyId, companyId))
-      .for("no key update")
-      .limit(1);
-    console.log("Wallet found for debit", { wallet });
-    if (!wallet) {
-      console.log("wallet does not exist");
-      throw new NotFoundError("wallet", { companyId });
-    }
-
-    if (wallet.balance < amountInKobo) {
-      console.log("Insufficient funds for debit");
-      throw new InsufficientFundsError("Insufficient funds", {
-        required: amountInKobo,
-        available: wallet.balance / 100,
-        companyId,
-      });
-    }
-
-    const [transaction] = await tx
-      .insert(walletTransactions)
-      .values({
-        id: uuidv4(),
-        walletId: wallet.id,
-        requestId: idempotencyKey,
-        type: "DEBIT",
-        amount: amountInKobo,
-        balanceBefore: wallet.balance,
-        balanceAfter: sql`${wallet.balance}::numeric - ${amountInKobo}::numeric`,
-        description,
-        reference: uuidv4(),
-      })
-      .returning();
-
-    await tx
-      .update(wallets)
-      .set({
-        balance: sql`${wallets.balance}::numeric - ${amountInKobo}::numeric`,
-        updatedAt: new Date(),
-      })
-      .where(eq(wallets.id, wallet.id));
-
-    console.log("Wallet debited successfully");
-    return { success: true, transaction };
+  const result = await walletRepository.createDebitTransactionAndUpdateBalance({
+    companyId,
+    amountInKobo,
+    requestId: effectiveRequestId,
+    description,
   });
 
-  if (cacheKey) {
-    await redisClient.set(cacheKey, JSON.stringify(result), { EX: 8400 });
+  if (!result.wallet && !result.alreadyProcessed) {
+    throw new NotFoundError("wallet", { companyId });
   }
 
-  return result;
+  if (result.insufficientFunds) {
+    throw new InsufficientFundsError("Insufficient funds", {
+      required: amountInKobo,
+      available: result.wallet.balance / 100,
+      companyId,
+    });
+  }
+
+  const payload = { success: true, transaction: result.transaction };
+
+  if (cacheKey) {
+    await redisClient.set(cacheKey, JSON.stringify(payload), { EX: 8400 });
+  }
+
+  return payload;
 };
 
 const getWalletHistory = async ({ companyId, limit, offset }) => {
-  const [wallet] = await db
-    .select()
-    .from(wallets)
-    .where(eq(wallets.companyId, companyId))
-    .limit(1);
+  const wallet = await walletRepository.findWalletByCompanyId(companyId);
 
   if (!wallet) {
     return {
@@ -243,18 +142,10 @@ const getWalletHistory = async ({ companyId, limit, offset }) => {
     };
   }
 
-  const [{ count }] = await db
-    .select({ count: sql`count(*)::int` })
-    .from(walletTransactions)
-    .where(eq(walletTransactions.walletId, wallet.id));
-
-  const transactions = await db
-    .select()
-    .from(walletTransactions)
-    .where(eq(walletTransactions.walletId, wallet.id))
-    .orderBy(walletTransactions.createdAt)
-    .limit(limit)
-    .offset(offset);
+  const [transactions, count] = await Promise.all([
+    walletRepository.listTransactionsByWalletId(wallet.id, { limit, offset }),
+    walletRepository.countTransactionsByWalletId(wallet.id),
+  ]);
 
   return {
     transactions,

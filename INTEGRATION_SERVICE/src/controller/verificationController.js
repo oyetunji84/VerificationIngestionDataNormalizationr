@@ -6,26 +6,25 @@ const passportClient = require("../service/passportService");
 
 const { asyncHandler } = require("../../utility/error");
 const { getVerificationResult } = require("../service/verificationService");
+const { buildTraceContextFromHeaders } = require("../infra/traceContext");
 
-const verifyNIN = asyncHandler(async (req, res, next) => {
-  // Idempotency key
+const verifyNIN = asyncHandler(async (req, res) => {
   const idempotencyKey =
     req.header("x-idempotency-key") ||
     req.header("X-IDEMPOTENCY-KEY") ||
     uuidv4();
-  console.log(idempotencyKey);
+
   const { nin } = req.validatedData;
   const companyId = req.company?.id;
-  console.log("NIN verification request", {
-    idempotencyKey,
-    nin,
-    companyId,
-  });
+  const traceContext = buildTraceContextFromHeaders(req.headers);
+
   const { data: job } = await ninClient.paidVerifyNin({
     idempotencyKey,
     companyId,
     nin,
     apiKey: req.apiKey,
+    traceId: traceContext.traceId,
+    traceparent: traceContext.traceparent,
   });
 
   return res.status(202).json({
@@ -34,24 +33,24 @@ const verifyNIN = asyncHandler(async (req, res, next) => {
     data: job,
   });
 });
-const verifyBVN = asyncHandler(async (req, res, next) => {
+
+const verifyBVN = asyncHandler(async (req, res) => {
   const idempotencyKey =
     req.header("x-idempotency-key") ||
     req.header("X-IDEMPOTENCY-KEY") ||
     uuidv4();
 
   const { bvn } = req.validatedData;
-  const company = req.company;
-  console.log("BVN verification request", {
-    idempotencyKey,
-    bvn,
-    companyId: company._id,
-  });
+  const companyId = req.company?.id;
+  const traceContext = buildTraceContextFromHeaders(req.headers);
+
   const { data: normalizedData } = await bvnClient.paidVerifyBVN({
     idempotencyKey,
-    companyId: company._id,
+    companyId,
     bvn,
     apiKey: req.apiKey,
+    traceId: traceContext.traceId,
+    traceparent: traceContext.traceparent,
   });
 
   return res.status(200).json({
@@ -60,25 +59,24 @@ const verifyBVN = asyncHandler(async (req, res, next) => {
     data: normalizedData,
   });
 });
-const verifyLicense = asyncHandler(async (req, res, next) => {
+
+const verifyLicense = asyncHandler(async (req, res) => {
   const idempotencyKey =
     req.header("x-idempotency-key") ||
     req.header("X-IDEMPOTENCY-KEY") ||
     uuidv4();
-  const { licenseNumber } = req.validatedData;
-  const company = req.company;
 
-  console.log("License verification request", {
-    idempotencyKey,
-    licenseNumber,
-    companyId: company._id,
-  });
+  const { licenseNumber } = req.validatedData;
+  const companyId = req.company?.id;
+  const traceContext = buildTraceContextFromHeaders(req.headers);
 
   const { data: normalizedData } = await licenseClient.paidVerifyLicense({
     idempotencyKey,
-    companyId: company._id,
+    companyId,
     licenseNumber,
     apiKey: req.apiKey,
+    traceId: traceContext.traceId,
+    traceparent: traceContext.traceparent,
   });
 
   return res.status(200).json({
@@ -89,47 +87,39 @@ const verifyLicense = asyncHandler(async (req, res, next) => {
   });
 });
 
-const verifyPassport = asyncHandler(async (req, res, next) => {
-  const IdempotencyKey =
+const verifyPassport = asyncHandler(async (req, res) => {
+  const idempotencyKey =
     req.header("x-idempotency-key") ||
     req.header("X-IDEMPOTENCY-KEY") ||
     uuidv4();
-  const { passportNumber } = req.validatedData;
-  const company = req.company;
 
-  console.log("Passport verification request", {
-    idempotencyKey: IdempotencyKey,
-    passportNumber,
-    companyId: company._id,
-  });
+  const { passportNumber } = req.validatedData;
+  const companyId = req.company?.id;
+  const traceContext = buildTraceContextFromHeaders(req.headers);
 
   const { data: normalizedData } = await passportClient.paidVerifyPassport({
-    idempotencyKey: IdempotencyKey,
-    companyId: company._id,
+    idempotencyKey,
+    companyId,
     passportNumber,
     apiKey: req.apiKey,
+    traceId: traceContext.traceId,
+    traceparent: traceContext.traceparent,
   });
 
   return res.status(200).json({
     success: true,
     message: "Verification successful",
     data: normalizedData,
-    requestId,
+    idempotencyKey,
   });
 });
-const getVerificationStatus = asyncHandler(async (req, res, next) => {
+
+const getVerificationStatus = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const companyId = req.company?.id;
-  console.log("Get verification status request", {
-    requestId: id,
-    companyId,
-  });
+
   const statusData = await getVerificationResult(id, companyId);
-  console.log("Verification status retrieved", {
-    requestId: id,
-    companyId,
-    status: statusData,
-  });
+
   return res.status(200).json({
     success: true,
     data: statusData,

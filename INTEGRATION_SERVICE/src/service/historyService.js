@@ -1,205 +1,193 @@
+const {
+  getElasticsearchClient,
+  ensureVerificationLogIndex,
+  verificationLogIndex,
+} = require("../infra/elasticSearch");
+const {
+  searchHistoryIndex,
+  aggregateHistoryIndex,
+} = require("../utility/historyIndex.util");
+const {
+  publishVerificationIndexMain,
+  publishHistoryReindexMain,
+} = require("../worker/publisher");
+const { createReindexJob, getReindexJob } = require("./reindexService");
+const { toTraceHeaders } = require("../infra/traceContext");
 
-const History = require('../models/historyModel');
+const normalizeServiceType = (serviceType) => {
+  if (serviceType === "LICENSE") return "DRIVERS_LICENSE";
+  return serviceType;
+};
 
-const logVerification = async (logData) => {
+const normalizeHistoryPayload = (logData = {}) => {
+  const now = new Date();
+  const requestedAt = logData.requestedAt ? new Date(logData.requestedAt) : now;
+  const createdAt = logData.createdAt ? new Date(logData.createdAt) : now;
+  const updatedAt = logData.updatedAt ? new Date(logData.updatedAt) : now;
+
+  return {
+    apiKey: logData.apiKey,
+    requestId: logData.requestId || logData.idempotencyKey || null,
+    serviceType: normalizeServiceType(logData.serviceType),
+    status: logData.status,
+    errorMessage: logData.errorMessage || null,
+    errorCode: logData.errorCode || null,
+    amountInKobo:
+      logData.amountInKobo === undefined || logData.amountInKobo === null
+        ? null
+        : Number(logData.amountInKobo),
+    walletTransactionId: logData.walletTransactionId
+      ? String(logData.walletTransactionId)
+      : null,
+    requestedAt: requestedAt.toISOString(),
+    createdAt: createdAt.toISOString(),
+    updatedAt: updatedAt.toISOString(),
+  };
+};
+
+const logVerification = async (logData, options = {}) => {
   try {
-    console.log("history being saved")
-    const {
-      apiKey,
-      requestId,
-      serviceType,
-      status,
-      errorMessage = null,
-      errorCode = null,
+    const payload = normalizeHistoryPayload(logData);
 
-    } = logData;
-    
-    const historyEntry = new History({
-      apiKey,
-      requestId,
-      serviceType,
-      requestedAt: new Date(),
-      status,
-      errorMessage,
-      errorCode,
+    const traceHeaders = toTraceHeaders({
+      traceId: options.traceId,
+      traceparent: options.traceparent,
     });
-    
-    const saved = await historyEntry.save();
-    
-    console.log('Verification logged to history', { 
-      serviceType,
-      status 
-    });
-    
-    return saved;
-    
+
+    await publishVerificationIndexMain(payload, 0, traceHeaders);
+
+    return {
+      queued: true,
+      requestId: payload.requestId,
+      serviceType: payload.serviceType,
+      status: payload.status,
+    };
   } catch (error) {
-    console.log('Failed to log verification to history', { 
+    console.log("Failed to publish verification history event", {
       error: error.message,
-      requestId: logData.requestId 
+      requestId: logData.requestId || logData.idempotencyKey,
     });
     return null;
   }
 };
+
+const ensureArray = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  return String(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
+async function runHistorySearch(params = {}) {
+  const client = getElasticsearchClient();
+  await ensureVerificationLogIndex();
+  return searchHistoryIndex(client, verificationLogIndex.index, params);
+}
+
 const getHistoryByFilters = async (filters, pagination = {}) => {
   try {
-    const {
-      apiKey,
-      serviceType,
-      startDate,
-      endDate,
-      status
-    } = filters;
-    
-    const {
-      page = 1,
-      limit = 20
-    } = pagination;
-    
-    const query = {};
-    
-    if (apiKey) query.apiKey = apiKey;
-    if (serviceType) query.serviceType = serviceType;
-    if (status) query.status = status;
-    
-      if (startDate || endDate) {
-      query.requestedAt = {};
-      if (startDate) query.requestedAt.$gte = new Date(startDate);
-      if (endDate) query.requestedAt.$lte = new Date(endDate);
-    }
-    
-    const skip = (page - 1) * limit;
-    
-    const [results, total] = await Promise.all([
-      History.find(query)
-        .sort({ requestedAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .select('-__v')
-        .lean(),
-      History.countDocuments(query)
-    ]);
-    
-    const totalPages = Math.ceil(total / limit);
-    
-    console.log('History query executed', { 
-      filters, 
-      page, 
-      limit, 
-      total, 
-      returned: results.length 
-    });
-    
-    return {
-      data: results,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1
-      }
+    const params = {
+      apiKey: filters.apiKey,
+      requestId: filters.requestId,
+      traceId: filters.traceId,
+      serviceType: filters.serviceType ? [filters.serviceType] : [],
+      status: filters.status ? [filters.status] : [],
+      dateFrom: filters.startDate,
+      dateTo: filters.endDate,
+      page: Number(pagination.page || 1),
+      size: Number(pagination.limit || 20),
+      sortBy: "requestedAt",
+      sortOrder: "desc",
     };
-    
+
+    const result = await runHistorySearch(params);
+
+    const totalPages = Math.ceil(result.total / result.size);
+    return {
+      data: result.data,
+      pagination: {
+        page: result.page,
+        limit: result.size,
+        total: result.total,
+        totalPages,
+        hasNextPage: result.page < totalPages,
+        hasPrevPage: result.page > 1,
+      },
+    };
   } catch (error) {
-    console.log('Error fetching history', { error: error.message, filters });
+    console.log("Error fetching history", { error: error.message, filters });
     throw new Error(`Failed to fetch history: ${error.message}`);
   }
 };
 
+const searchHistory = async (params = {}) => {
+  const normalized = {
+    q: params.q,
+    apiKey: params.apiKey,
+    requestId: params.requestId,
+    serviceType: ensureArray(params.serviceType),
+    status: ensureArray(params.status),
+    errorCode: ensureArray(params.errorCode),
+    traceId: params.traceId,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    page: Number(params.page || 1),
+    size: Number(params.size || 20),
+    sortBy: params.sortBy || "requestedAt",
+    sortOrder: params.sortOrder || "desc",
+  };
 
-const getVerificationStats = async (filters = {}) => {
-  try {
-    const {
-      apiKey,
-      serviceType,
-      startDate,
-      endDate
-    } = filters;
-    
-    const matchQuery = {};
-    
-    if (apiKey) matchQuery.apiKey = apiKey;
-    if (serviceType) matchQuery.serviceType = serviceType;
-    
-    if (startDate || endDate) {
-      matchQuery.requestedAt = {};
-      if (startDate) matchQuery.requestedAt.$gte = new Date(startDate);
-      if (endDate) matchQuery.requestedAt.$lte = new Date(endDate);
-    }
-    
-        const stats = await History.aggregate([
-      { $match: matchQuery },
-      {
-        $group: {
-          _id: null,
-          totalVerifications: { $sum: 1 },
-          byService: {
-            $push: {
-              serviceType: '$serviceType',
-              status: '$status'
-            }
-          },
-          byStatus: {
-            $push: '$status'
-          }
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          totalVerifications: 1,
-          byService: 1,
-          byStatus: 1
-        }
-      }
-    ]);
-    
-    if (stats.length === 0) {
-      return {
-        totalVerifications: 0,
-        avgResponseTime: 0,
-        byService: {},
-        byStatus: {}
-      };
-    }
-    
-    const result = stats[0];
-      
-    const serviceCount = {};
-    result.byService.forEach(item => {
-      if (!serviceCount[item.serviceType]) {
-        serviceCount[item.serviceType] = 0;
-      }
-      serviceCount[item.serviceType]++;
-    });
-    
-    const statusCount = {};
-    result.byStatus.forEach(status => {
-      if (!statusCount[status]) {
-        statusCount[status] = 0;
-      }
-      statusCount[status]++;
-    });
-    
-    console.log('Statistics calculated', { totalVerifications: result.totalVerifications });
-    
-    return {
-      totalVerifications: result.totalVerifications,
-      avgResponseTime: result.avgResponseTime,
-      byService: serviceCount,
-      byStatus: statusCount
-    };
-    
-  } catch (error) {
-    console.log('Error calculating statistics', { error: error.message });
-    throw new Error(`Failed to calculate statistics: ${error.message}`);
-  }
+  return runHistorySearch(normalized);
 };
+
+const aggregateHistory = async (params = {}) => {
+  const normalized = {
+    q: params.q,
+    apiKey: params.apiKey,
+    requestId: params.requestId,
+    serviceType: ensureArray(params.serviceType),
+    status: ensureArray(params.status),
+    errorCode: ensureArray(params.errorCode),
+    traceId: params.traceId,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+  };
+
+  const client = getElasticsearchClient();
+  await ensureVerificationLogIndex();
+  return aggregateHistoryIndex(client, verificationLogIndex.index, normalized);
+};
+
+const enqueueReindexJob = async (
+  { filters = {}, batchSize = 200 } = {},
+  options = {},
+) => {
+  const job = createReindexJob({ filters, batchSize });
+  await publishHistoryReindexMain(
+    {
+      reindexJobId: job.id,
+      filters,
+      batchSize,
+    },
+    0,
+    toTraceHeaders({
+      traceId: options.traceId,
+      traceparent: options.traceparent,
+    }),
+  );
+
+  return job;
+};
+
+const getReindexStatus = async (jobId) => getReindexJob(jobId);
 
 module.exports = {
   logVerification,
   getHistoryByFilters,
-  getVerificationStats
+  searchHistory,
+  aggregateHistory,
+  enqueueReindexJob,
+  getReindexStatus,
 };

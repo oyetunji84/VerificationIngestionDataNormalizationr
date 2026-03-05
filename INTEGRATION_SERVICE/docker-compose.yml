@@ -3,8 +3,42 @@ version: "3.8"
 services:
   rabbitmq:
     image: rabbitmq:3-management
+    container_name: verifyme-rabbitmq
     ports:
-      - "5672:5672" # AMQP
-      - "15672:15672" # Management UI (guest/guest)
+      - "5672:5672"
+      - "15672:15672"
     volumes:
-      - ./:/var/lib/rabbitmq
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - verifyme-network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.2
+    container_name: verifyme-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - verifyme-network
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    container_name: verifyme-jaeger
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+    networks:
+      - verifyme-network
+
+volumes:
+  rabbitmq_data:
+  elasticsearch_data:
+
+networks:
+  verifyme-network:
+    driver: bridge

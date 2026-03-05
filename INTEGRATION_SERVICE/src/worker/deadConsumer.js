@@ -1,85 +1,71 @@
 require("dotenv").config();
 
-const { getChannel } = require("../infra/raddbitmq");
+const { getChannel } = require("../infra/rabbitmq");
 const { TOPOLOGY } = require("../infra/setUpQueue");
 const { logVerification } = require("../service/historyService");
 const { redisClient } = require("../infra/redisDb");
+const jobRepository = require("../repository/jobRepository");
+
 const NIN_COST_IN_NAIRA = 100;
 const NIN_COST_IN_KOBO = NIN_COST_IN_NAIRA * 100;
-const Job = require("../models/JobModel");
-async function refundUser(job) {
-  // await walletService.credit({
-  //   companyId: job.companyId,
-  //   amountInKobo: job.amountInKobo,
-  //   description: `Refund for failed job ${job._id}`,
-  //   idempotencyKey: `refund-${job._id}`,
-  // });
-  console.log(
-    `[DeadConsumer] Refund issued for job ${job._id} — amount: ${job.amountInKobo}`,
-  );
-}
 
 async function startDeadConsumer() {
   const channel = await getChannel();
 
   channel.prefetch(10);
-
   console.log("[DeadConsumer] Listening for dead-lettered jobs...");
 
-  channel.consume(TOPOLOGY.QUEUES.DEAD, async (msg) => {
+  channel.consume(TOPOLOGY.JOB.QUEUES.DEAD, async (msg) => {
     if (!msg) return;
 
-    let jobId, payload, retryCount;
+    let jobId;
+    let payload;
+    let retryCount;
+
     try {
-      ({ jobId, payload, retryCount, _, route } = JSON.parse(
-        msg.content.toString(),
-      ));
+      ({ jobId, payload, retryCount } = JSON.parse(msg.content.toString()));
     } catch (e) {
-      console.error(" Failed to parse dead message:");
+      console.error("Failed to parse dead message");
       channel.ack(msg);
       return;
     }
-    console.log(payload);
-    console.warn(` Processing dead job ${jobId} after ${retryCount} retries`);
 
     try {
-      await Job.findByIdAndUpdate(jobId, {
+      await jobRepository.updateById(jobId, {
         status: "failed",
         retry_count: retryCount,
         failed_at: new Date(),
       });
 
-      //   await refundUser(job);
-      console.log(route);
+      const route = payload?.route || "";
+      const serviceType = route.split("/")[2]?.toUpperCase() || "NIN";
+
       logVerification({
         apiKey: process.env.API_KEY,
-        serviceType: payload.route.split("/")[2].toUpperCase(), // crude way to get service type from route
+        serviceType,
         status: "FAILED",
-        idempotencyKey: payload.idempotencyKey,
+        requestId: payload?.idempotencyKey,
         amountInKobo: NIN_COST_IN_KOBO,
         walletTransactionId: "",
       }).catch((err) => {
-        console.error("Failed to log NIN verification", {
-          idempotencyKey,
+        console.error("Failed to log failed verification", {
+          requestId: payload?.idempotencyKey,
           error: err.message,
         });
       });
 
-      console.log(`[✓] Dead job ${jobId} marked failed + refunded`);
+      console.log(`[✓] Dead job ${jobId} marked failed`);
       channel.ack(msg);
-      //set the cache here for the idempotency key to avoid hitting the flow again
-      if (payload.idempotencyKey) {
+
+      if (payload?.idempotencyKey) {
         await redisClient.set(
           `IDEMPOTENCY:${payload.idempotencyKey}`,
           JSON.stringify({ status: "failed", id: jobId }),
-          {
-            EX: 8400,
-          },
+          { EX: 8400 },
         );
       }
     } catch (err) {
       console.error(
-        err,
         `[DeadConsumer] Failed to process dead job ${jobId}:`,
         err.message,
       );

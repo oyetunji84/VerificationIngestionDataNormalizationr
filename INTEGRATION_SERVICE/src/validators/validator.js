@@ -65,8 +65,82 @@ const historyFiltersSchema = Joi.object({
   startDate: Joi.date().optional(),
   endDate: Joi.date().min(Joi.ref("startDate")).optional(),
   status: Joi.string().valid("SUCCESS", "FAILED", "PARTIAL").optional(),
+  requestId: Joi.string().optional(),
+  traceId: Joi.string().optional(),
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(20),
+});
+
+const historySearchSchema = Joi.object({
+  q: Joi.string().allow("").optional(),
+  apiKey: Joi.string().optional(),
+  requestId: Joi.string().optional(),
+  serviceType: Joi.alternatives()
+    .try(
+      Joi.string().valid("NIN", "BVN", "DRIVERS_LICENSE", "PASSPORT"),
+      Joi.array().items(
+        Joi.string().valid("NIN", "BVN", "DRIVERS_LICENSE", "PASSPORT"),
+      ),
+    )
+    .optional(),
+  status: Joi.alternatives()
+    .try(
+      Joi.string().valid("SUCCESS", "FAILED", "PARTIAL"),
+      Joi.array().items(Joi.string().valid("SUCCESS", "FAILED", "PARTIAL")),
+    )
+    .optional(),
+  errorCode: Joi.alternatives()
+    .try(Joi.string(), Joi.array().items(Joi.string()))
+    .optional(),
+  traceId: Joi.string().optional(),
+  dateFrom: Joi.date().iso().optional(),
+  dateTo: Joi.date().iso().optional(),
+  page: Joi.number().integer().min(1).default(1),
+  size: Joi.number().integer().min(1).max(100).default(20),
+  sortBy: Joi.string()
+    .valid("requestedAt", "createdAt", "updatedAt")
+    .default("requestedAt"),
+  sortOrder: Joi.string().valid("asc", "desc").default("desc"),
+});
+
+const historyAggregationSchema = Joi.object({
+  q: Joi.string().allow("").optional(),
+  apiKey: Joi.string().optional(),
+  requestId: Joi.string().optional(),
+  serviceType: Joi.alternatives()
+    .try(
+      Joi.string().valid("NIN", "BVN", "DRIVERS_LICENSE", "PASSPORT"),
+      Joi.array().items(
+        Joi.string().valid("NIN", "BVN", "DRIVERS_LICENSE", "PASSPORT"),
+      ),
+    )
+    .optional(),
+  status: Joi.alternatives()
+    .try(
+      Joi.string().valid("SUCCESS", "FAILED", "PARTIAL"),
+      Joi.array().items(Joi.string().valid("SUCCESS", "FAILED", "PARTIAL")),
+    )
+    .optional(),
+  errorCode: Joi.alternatives()
+    .try(Joi.string(), Joi.array().items(Joi.string()))
+    .optional(),
+  traceId: Joi.string().optional(),
+  dateFrom: Joi.date().iso().optional(),
+  dateTo: Joi.date().iso().optional(),
+});
+
+const historyReindexSchema = Joi.object({
+  filters: Joi.object({
+    apiKey: Joi.string().optional(),
+    serviceType: Joi.string()
+      .valid("NIN", "BVN", "DRIVERS_LICENSE", "PASSPORT")
+      .optional(),
+    status: Joi.string().valid("SUCCESS", "FAILED", "PARTIAL").optional(),
+    requestId: Joi.string().optional(),
+    startDate: Joi.date().iso().optional(),
+    endDate: Joi.date().iso().optional(),
+  }).default({}),
+  batchSize: Joi.number().integer().min(10).max(1000).default(200),
 });
 
 const registerCompanySchema = Joi.object({
@@ -98,5 +172,8 @@ module.exports = {
   walletHistoryQuerySchema,
   verifyPassportSchema,
   historyFiltersSchema,
+  historySearchSchema,
+  historyAggregationSchema,
+  historyReindexSchema,
   paramsVerificationSchema,
 };
