@@ -11,10 +11,6 @@ router.post(
   verificationController.queueVerification,
 );
 
-router.get(
-  "/verification/:id",
-
-  verificationController.getVerificationStatus,
-);
+router.get("/verification/:id", verificationController.getVerificationStatus);
 
 module.exports = router;

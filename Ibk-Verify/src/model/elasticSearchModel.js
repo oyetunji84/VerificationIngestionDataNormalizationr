@@ -1,5 +1,5 @@
 const elasticSchema = {
-  index: "Logs_verify",
+  index: "logs_verify",
   settings: {
     number_of_shards: 1,
     number_of_replicas: 0,

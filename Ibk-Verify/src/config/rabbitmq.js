@@ -2,8 +2,8 @@ const amqp = require("amqplib");
 
 const RABBITMQ_URL = process.env.RABBITMQ_URL || "amqp://rabbitmq:5672";
 
-const VERIFICATION_MAIN_EXCHANGE = "verification_main_exchange";
-const VERIFICATION_MAIN_QUEUE = "verification_main_queue";
+const VERIFICATION_MAIN_EXCHANGE = "verification-main-exchange";
+const VERIFICATION_MAIN_QUEUE = "verification-main-queue";
 const VERIFICATION_ROUTING_KEY = "verification.main.create";
 
 const VERIFICATION_RETRY_EXCHANGE = "verification-retry-exchange";

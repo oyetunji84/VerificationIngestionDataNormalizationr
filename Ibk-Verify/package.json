@@ -7,9 +7,13 @@
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
+    "start:dev": "nodemon ./src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "@elastic/elasticsearch": "^8.19.1",
+    "@opentelemetry/auto-instrumentations-node": "^0.71.0",
+    "@opentelemetry/sdk-node": "^0.213.0",
     "amqplib": "^0.10.9",
     "axios": "^1.13.6",
     "cors": "^2.8.6",
@@ -20,6 +24,7 @@
     "joi": "^18.0.2",
     "mongoose": "^9.2.4",
     "morgan": "^1.10.1",
+    "nodemon": "^3.1.14",
     "pg": "^8.20.0",
     "pg-hstore": "^2.3.4",
     "redis": "^5.11.0",

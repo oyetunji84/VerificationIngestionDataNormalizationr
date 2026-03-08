@@ -5,7 +5,7 @@ class BaseVerificationService {
   constructor(endpoint) {
     if (!endpoint) throw new Error("endpoint is required");
     this.endpoint = endpoint;
-    this.baseUrl = process.env.VERIFICATION_BASE_URL;
+    this.baseUrl = process.env.BASE_URL;
     this.client = axios.create({
       baseURL: this.baseUrl,
       timeout: 5000,

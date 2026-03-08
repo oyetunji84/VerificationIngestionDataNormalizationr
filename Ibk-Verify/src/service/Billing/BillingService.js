@@ -1,7 +1,7 @@
 const { sequelize } = require("../../config/Postgress");
 const { redisClient } = require("../../config/redis");
-const Wallet = require("../../model/WalletModel");
-const Transaction = require("../../model/TransactionModel");
+const WalletRepository = require("../../repository/WalletRepository");
+const TransactionRepository = require("../../repository/TransactionRepository");
 const PRICING = require("../../utils/pricing");
 const { trace, SpanStatusCode } = require("@opentelemetry/api");
 
@@ -27,13 +27,7 @@ class BillingService {
     return withBillingSpan(
       "billing.find_or_create_wallet",
       { "billing.organization_id": companyId },
-      async () => {
-        const [wallet, created] = await Wallet.findOrCreate({
-          where: { companyId },
-          defaults: { companyId },
-        });
-        return { wallet, created };
-      },
+      () => WalletRepository.findOrCreate(companyId),
     );
   }
 
@@ -42,7 +36,7 @@ class BillingService {
       "billing.get_balance",
       { "billing.organization_id": companyId },
       async () => {
-        const wallet = await Wallet.findOne({ where: { companyId } });
+        const wallet = await WalletRepository.findByCompanyId(companyId);
         if (!wallet) {
           const error = new Error("Wallet not found for this organization.");
           error.code = "404";
@@ -63,11 +57,12 @@ class BillingService {
       },
       async () => {
         if (idempotencyKey) {
-          const cachedResult = await redisClient.get(
+          const cached = await redisClient.get(
             `billing:fund:${idempotencyKey}`,
           );
-          if (cachedResult) return JSON.parse(cachedResult);
+          if (cached) return JSON.parse(cached);
         }
+
         if (amount <= 0) {
           const error = new Error("Funding amount must be positive.");
           error.code = "400";
@@ -76,11 +71,10 @@ class BillingService {
 
         const t = await sequelize.transaction();
         try {
-          const wallet = await Wallet.findOne({
-            where: { companyId },
-            transaction: t,
-            lock: t.LOCK.UPDATE,
-          });
+          const wallet = await WalletRepository.findByCompanyIdWithLock(
+            companyId,
+            t,
+          );
           if (!wallet) {
             const error = new Error("Wallet not found for this organization.");
             error.code = "404";
@@ -88,13 +82,10 @@ class BillingService {
           }
 
           const balanceBefore = Number(wallet.balance);
-
-          await wallet.increment("balance", { by: amount, transaction: t });
-          await wallet.reload({ transaction: t });
-
+          await WalletRepository.incrementBalance(wallet, amount, t);
           const balanceAfter = Number(wallet.balance);
 
-          await Transaction.create(
+          await TransactionRepository.create(
             {
               walletId: wallet.id,
               type: "CREDIT",
@@ -105,7 +96,7 @@ class BillingService {
               reference: idempotencyKey || reference,
               status: "SUCCESS",
             },
-            { transaction: t },
+            t,
           );
 
           await t.commit();
@@ -122,6 +113,7 @@ class BillingService {
               { EX: 86400 },
             );
           }
+
           return result;
         } catch (error) {
           await t.rollback();
@@ -141,10 +133,8 @@ class BillingService {
       },
       async () => {
         if (idempotencyKey) {
-          const cachedResult = await redisClient.get(
-            `billing:${idempotencyKey}`,
-          );
-          if (cachedResult) return JSON.parse(cachedResult);
+          const cached = await redisClient.get(`billing:${idempotencyKey}`);
+          if (cached) return JSON.parse(cached);
         }
 
         const cost = PRICING[serviceType];
@@ -158,63 +148,51 @@ class BillingService {
 
         const t = await sequelize.transaction();
         try {
-          const clientWallet = await Wallet.findOne({
-            where: { companyId },
-            transaction: t,
-            lock: t.LOCK.UPDATE,
-          });
+          const wallet = await WalletRepository.findByCompanyIdWithLock(
+            companyId,
+            t,
+          );
 
-          if (!clientWallet) {
+          if (!wallet)
             return {
               success: false,
               error: "WALLET_NOT_FOUND",
               message: "Client wallet does not exist.",
             };
-          }
-          if (clientWallet.status === "SUSPENDED") {
+          if (wallet.status === "SUSPENDED")
             return {
               success: false,
               error: "WALLET_SUSPENDED",
               message: "Client wallet is suspended.",
             };
-          }
-
-          if (Number(clientWallet.balance) < cost) {
+          if (Number(wallet.balance) < cost)
             return {
               success: false,
               error: "INSUFFICIENT_FUNDS",
               message: "Insufficient funds for this transaction.",
             };
-          }
 
-          const clientBalanceBefore = Number(clientWallet.balance);
+          const balanceBefore = Number(wallet.balance);
+          await WalletRepository.decrementBalance(wallet, cost, t);
+          const balanceAfter = Number(wallet.balance);
 
-          await clientWallet.decrement("balance", { by: cost, transaction: t });
-
-          await clientWallet.reload({ transaction: t });
-
-          const clientBalanceAfter = Number(clientWallet.balance);
-
-          await Transaction.create(
+          await TransactionRepository.create(
             {
-              walletId: clientWallet.id,
+              walletId: wallet.id,
               type: "DEBIT",
               amount: cost,
-              balanceBefore: clientBalanceBefore,
-              balanceAfter: clientBalanceAfter,
+              balanceBefore,
+              balanceAfter,
               description: `${serviceType} Verification`,
               reference: idempotencyKey,
             },
-            { transaction: t },
+            t,
           );
 
           await t.commit();
 
-          const result = {
-            success: true,
-            cost,
-            newBalance: clientBalanceAfter,
-          };
+          const result = { success: true, cost, newBalance: balanceAfter };
+
           if (idempotencyKey) {
             await redisClient.set(
               `billing:${idempotencyKey}`,
@@ -222,18 +200,10 @@ class BillingService {
               { EX: 86400 },
             );
           }
+
           return result;
         } catch (error) {
           await t.rollback();
-          if (error.code === "SYS_WALLET_MISSING") {
-            console.error("CRITICAL: System revenue wallet is missing!", error);
-            return {
-              success: false,
-              error: "SERVICE_UNAVAILABLE",
-              message:
-                "The service is temporarily unavailable due to a configuration issue. Please try again later.",
-            };
-          }
           throw error;
         }
       },
@@ -249,7 +219,7 @@ class BillingService {
         "billing.limit": Number(limit),
       },
       async () => {
-        const wallet = await Wallet.findOne({ where: { companyId } });
+        const wallet = await WalletRepository.findByCompanyId(companyId);
         if (!wallet) {
           const error = new Error("Wallet not found for this organization.");
           error.code = "BILLING404";
@@ -257,9 +227,8 @@ class BillingService {
         }
 
         const offset = (page - 1) * limit;
-        const { count, rows } = await Transaction.findAndCountAll({
-          where: { walletId: wallet.id },
-          order: [["createdAt", "DESC"]],
+        const { count, rows } = await TransactionRepository.findAndCountAll({
+          walletId: wallet.id,
           limit,
           offset,
         });
@@ -273,6 +242,7 @@ class BillingService {
       },
     );
   }
+
   async refundWallet(companyId, serviceType, reference) {
     return withBillingSpan(
       "billing.refund_wallet",
@@ -291,54 +261,44 @@ class BillingService {
           };
         }
 
-        const existingRefund = await Transaction.findOne({
-          where: {
-            reference,
-            type: "CREDIT",
-            description: `Refund for failed ${serviceType} Verification`,
-          },
+        const existingRefund = await TransactionRepository.findOne({
+          reference,
+          type: "CREDIT",
+          description: `Refund for failed ${serviceType} Verification`,
         });
+
         if (existingRefund) {
-          console.log(
-            `Refund with reference ${reference} already processed. Kindly hang on.`,
-          );
+          console.log(`Refund with reference ${reference} already processed.`);
           return { success: true, newBalance: existingRefund.balanceAfter };
         }
 
         const t = await sequelize.transaction();
         try {
-          const clientWallet = await Wallet.findOne({
-            where: { companyId },
-            transaction: t,
-            lock: t.LOCK.UPDATE,
-          });
+          const wallet = await WalletRepository.findByCompanyIdWithLock(
+            companyId,
+            t,
+          );
+          if (!wallet) throw new Error("Wallet not found during refund.");
 
-          if (!clientWallet) {
-            throw new Error("Wallet not found during refund.");
-          }
+          const balanceBefore = Number(wallet.balance);
+          await WalletRepository.incrementBalance(wallet, cost, t);
+          const balanceAfter = Number(wallet.balance);
 
-          const clientBalanceBefore = Number(clientWallet.balance);
-
-          await clientWallet.increment("balance", { by: cost, transaction: t });
-
-          await clientWallet.reload({ transaction: t });
-
-          const clientBalanceAfter = Number(clientWallet.balance);
-
-          await Transaction.create(
+          await TransactionRepository.create(
             {
-              walletId: clientWallet.id,
+              walletId: wallet.id,
               type: "CREDIT",
               amount: cost,
-              balanceBefore: clientBalanceBefore,
-              balanceAfter: clientBalanceAfter,
+              balanceBefore,
+              balanceAfter,
               description: `Refund for failed ${serviceType} Verification`,
               reference,
             },
-            { transaction: t },
+            t,
           );
+
           await t.commit();
-          return { success: true, newBalance: clientBalanceAfter };
+          return { success: true, newBalance: balanceAfter };
         } catch (error) {
           await t.rollback();
           console.error("Refund failed:", error);

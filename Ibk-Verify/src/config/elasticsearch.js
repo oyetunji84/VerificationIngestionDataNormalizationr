@@ -6,15 +6,22 @@ const ELASTICSEARCH_URL =
 
 let esClient = null;
 
-const connectElasticsearch = async () => {
-  esClient = new Client({
-    node: ELASTICSEARCH_URL,
-    maxRetries: 5,
-    requestTimeout: 10000,
-  });
+const connectElasticSearch = async () => {
+  try {
+    console.log("initializing client");
+    esClient = new Client({
+      node: "http://localhost:9200",
+      maxRetries: 5,
+      requestTimeout: 10000,
+    });
+    // console.log(esClient);
+  } catch (err) {
+    // console.log(err.message);
+  }
 };
 
 const getElasticsearchClient = () => {
+  // console.log(esClient);
   if (!esClient) {
     throw new Error("Elasticsearch client not initialized");
   }
@@ -25,6 +32,9 @@ const ensureelasticSchema = async () => {
   const client = getElasticsearchClient();
   const { index, settings, mappings } = elasticSchema;
   const exists = await client.indices.exists({ index });
+  console.log(index, settings);
+  // console.log(await client.indices.exists());
+  console.log(exists);
   if (!exists) {
     await client.indices.create({ index, settings, mappings });
     console.log(`Elasticsearch index created: ${index}`);
@@ -32,7 +42,7 @@ const ensureelasticSchema = async () => {
 };
 
 module.exports = {
-  connectElasticsearch,
+  connectElasticSearch,
   getElasticsearchClient,
   ensureelasticSchema,
   elasticSchema,

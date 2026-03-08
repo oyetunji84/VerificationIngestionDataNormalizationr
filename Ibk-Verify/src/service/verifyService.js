@@ -1,14 +1,13 @@
-const ninService = require("./NinService");
 const baseService = require("./BaseVerificationService.js");
-const normalizer = require("../normalizer/normalizer");
-const logModel = require("../model/LogModel");
-const billingService = require("../service/Billing/BillingService");
-const generateUnique = require("../utils/generateUUId");
-const AppError = require("../utils/error");
-const { redisClient } = require("../config/redis");
-const { incrementMetric } = require("../utils/metrics");
-const { publishToQueue } = require("../config/rabbitmq");
-const { injectTraceHeaders } = require("../utils/tracing");
+const normalizer = require("../normalizer/normalizer.js");
+const logModel = require("../model/LogModel.js");
+const billingService = require("./Billing/BillingService.js");
+const generateUnique = require("../utils/generateUUId.js");
+const AppError = require("../utils/error.js");
+const { redisClient } = require("../config/redis.js");
+const { incrementMetric } = require("../utils/metrics.js");
+const { publishToQueue } = require("../config/rabbitmq.js");
+const { injectTraceHeaders } = require("../utils/tracing.js");
 // const {
 //   enqueueelasticSchema,
 // } = require("../../audit/search/search-index.publisher");
@@ -16,10 +15,10 @@ const crypto = require("crypto");
 
 const CACHE_TTL = 3600;
 
-const bvnService = new baseService("");
-const ninService = new baseService("");
-const passportService = new baseService("");
-const LicenseService = new baseService("");
+const bvnService = new baseService("api/verify/bvn");
+const ninService = new baseService("api/verify/nin");
+const passportService = new baseService("api/verify/passport");
+const LicenseService = new baseService("api/verify/license");
 class VerificationService {
   async createVerificationJob(jobDetails) {
     const { type, id, companyId, idempotencyKey: clientKey } = jobDetails;
