@@ -12,9 +12,7 @@ BVN-SERVICE/.env
 NIN-SERVICE/.env
 NIN-SERVICE/scripts
 NIN-SERVICE/docs
-<<<<<<< HEAD
 DRIVERS-LICENSE-SERVICE/.env
 GOV-SERVICE
-=======
-DRIVERS-LICENSE-SERVICE/.env
->>>>>>> origin/main
+billing-service/node_modules
+billing-service/.env
