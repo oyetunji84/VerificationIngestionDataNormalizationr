@@ -1,5 +1,7 @@
+require("dotenv").config("../../.env");
 const CompanyModel = require("../model/CompanyModel.js");
-const { hashApiKey } = require("../utils/apikey.util");
+// const { hashApiKey } = require("../utils/apikey.util");
+const { hashApiKey } = require("../utils/apiKey.util");
 
 const authenticate = async (req, res, next) => {
   try {
@@ -21,8 +23,10 @@ const authenticate = async (req, res, next) => {
     }
 
     const keyHash = hashApiKey(apiKey, pepper);
+    console.log(keyHash);
+    // console.log(await CompanyModel.findOne({ clientSecret: keyHash }));
     const organization = await CompanyModel.findOne({ clientSecret: keyHash });
-
+    // console.log(organization);
     if (!organization) {
       return res.status(401).json({
         code: "401",
@@ -38,6 +42,7 @@ const authenticate = async (req, res, next) => {
     }
 
     req.company = organization;
+    console.log("for company", req.company);
     next();
   } catch (error) {
     console.error("Auth Error:", error);

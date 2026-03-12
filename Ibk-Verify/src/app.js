@@ -11,6 +11,7 @@ const { getChannel } = require("../src/config/rabbitmq");
 const { getElasticsearchClient } = require("./config/elasticsearch");
 const { getMetrics } = require("../src/utils/metrics");
 
+const { elasticSchema } = require("./model/elasticSearchModel");
 const app = express();
 
 app.use(helmet());
@@ -40,7 +41,7 @@ app.get("/health/ready", async (req, res) => {
 
   try {
     const esClient = getElasticsearchClient();
-    await esClient.cluster.health({ index: verificationLogIndex.index });
+    await esClient.cluster.health({ index: elasticSchema.index });
     checks.elasticsearch = "UP";
   } catch (error) {
     checks.elasticsearch = "DOWN";

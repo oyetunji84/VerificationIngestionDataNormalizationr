@@ -1,7 +1,7 @@
 const baseService = require("./BaseVerificationService.js");
 const normalizer = require("../normalizer/normalizer.js");
 const logModel = require("../model/LogModel.js");
-const billingService = require("./Billing/BillingService.js");
+const billingService = require("./Billing/billingGrpcService.js");
 const generateUnique = require("../utils/generateUUId.js");
 const AppError = require("../utils/error.js");
 const { redisClient } = require("../config/redis.js");
@@ -21,22 +21,22 @@ const passportService = new baseService("api/verify/passport");
 const LicenseService = new baseService("api/verify/license");
 class VerificationService {
   async createVerificationJob(jobDetails) {
-    const { type, id, companyId, idempotencyKey: clientKey } = jobDetails;
+    const { type, id, company, idempotencyKey: clientKey } = jobDetails;
 
     const idempotencyKey = clientKey || generateUnique();
-
+    console.log("company", company, type);
     if (idempotencyKey) {
       const existingLog = await logModel.findOne({ idempotencyKey });
       if (existingLog) {
         return { isDuplicate: true, job: existingLog };
       }
     }
-
+    console.log(company);
     const log = await logModel.create({
-      verificationType: type,
+      type,
       searchId: id,
       status: "PENDING",
-      companyId: companyId._id,
+      companyId: company._id,
       idempotencyKey,
     });
 
@@ -44,7 +44,7 @@ class VerificationService {
       logId: log._id,
       type,
       id,
-      companyId: companyId._id.toString(),
+      companyId: company._id.toString(),
       idempotencyKey,
     };
     publishToQueue(jobData, { headers: injectTraceHeaders() });
@@ -162,16 +162,6 @@ class VerificationService {
       idempotencyKey,
     );
 
-    if (!billingResult.success) {
-      await this.findAndUpdateLog(
-        logId,
-        "FAILED",
-        null,
-        `Billing failed: ${billingResult.message}`,
-      );
-      return;
-    }
-
     try {
       const callbackUrl = `${process.env.GATEWAY_BASE_URL}/api/v1/webhook/gov-provider`;
       let providerResponse = null;
@@ -180,17 +170,11 @@ class VerificationService {
           providerResponse = await ninService.verify(id, callbackUrl, logId);
           break;
         case "BVN":
-          providerResponse = await bvnService.verify(
-            id,
-
-            callbackUrl,
-            logId,
-          );
+          providerResponse = await bvnService.verify(id, callbackUrl, logId);
           break;
         case "PASSPORT":
           providerResponse = await passportService.verify(
             id,
-
             callbackUrl,
             logId,
           );
@@ -217,17 +201,6 @@ class VerificationService {
         error.message,
       );
       throw error;
-      // await billingService.refundWallet(
-      //   companyId,
-      //   type.toUpperCase(),
-      //   `refund_dispatch_failed_${logId}`,
-      // );
-      // await this.findAndUpdateLog(
-      //   logId,
-      //   "FAILED",
-      //   null,
-      //   `Failed to dispatch job to provider: ${error.message}`,
-      // );
     }
   }
 

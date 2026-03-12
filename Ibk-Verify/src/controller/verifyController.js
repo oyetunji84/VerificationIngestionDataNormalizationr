@@ -4,7 +4,7 @@ const asyncHandler = require("../utils/asyncHandler");
 exports.queueVerification = asyncHandler(async (req, res) => {
   const { type, id } = req.body;
   const company = req.company;
-
+  console.log(company);
   const idempotencyKey =
     req.headers["x-idempotency-key"] || req.body.idempotencyKey;
 

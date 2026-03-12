@@ -1,0 +1,137 @@
+
+syntax = "proto3";
+
+package billing.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option js_normal_mode = true;
+// 
+service BillingService {
+// 
+  rpc FindOrCreateWallet(FindOrCreateWalletRequest) returns (FindOrCreateWalletResponse);
+
+// 
+  rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse);
+
+// 
+  rpc ChargeWallet(ChargeWalletRequest) returns (ChargeWalletResponse);
+
+// 
+  rpc FundWallet(FundWalletRequest) returns (FundWalletResponse);
+// 
+  rpc RefundWallet(RefundWalletRequest) returns (RefundWalletResponse);
+
+// 
+  rpc GetTransactions(GetTransactionsRequest) returns (GetTransactionsResponse);
+}
+
+enum ServiceType {
+  SERVICE_TYPE_UNSPECIFIED  = 0; // never send this — used as proto3 zero-value default
+  SERVICE_TYPE_BVN          = 1;
+  SERVICE_TYPE_NIN          = 2;
+  SERVICE_TYPE_PASSPORT      = 3;
+  SERVICE_TYPE_DRIVERS_LICENSE = 4;
+}
+
+enum WalletStatus {
+  WALLET_STATUS_UNSPECIFIED = 0;
+  WALLET_STATUS_ACTIVE      = 1;
+  WALLET_STATUS_SUSPENDED   = 2;
+}
+
+enum TransactionType {
+  TRANSACTION_TYPE_UNSPECIFIED = 0;
+  TRANSACTION_TYPE_CREDIT      = 1;
+  TRANSACTION_TYPE_DEBIT       = 2;
+}
+
+enum TransactionStatus {
+  TRANSACTION_STATUS_UNSPECIFIED = 0;
+  TRANSACTION_STATUS_SUCCESS     = 1;
+  TRANSACTION_STATUS_FAILED      = 2;
+  TRANSACTION_STATUS_PENDING     = 3;
+}
+
+message Transaction {
+  string              id              = 1;
+  TransactionType     type            = 2;
+  int64               amount_kobo     = 3; 
+  int64               balance_before_kobo = 4;
+  int64               balance_after_kobo  = 5;
+  string              description     = 6;
+  string              reference       = 7; 
+  TransactionStatus   status          = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+
+message FindOrCreateWalletRequest {
+  string organization_id = 1; // required
+}
+
+message FindOrCreateWalletResponse {
+  string        wallet_id       = 1;
+  string        organization_id = 2;
+  int64         balance_kobo    = 3;
+  string        currency        = 4; 
+  WalletStatus  status          = 5;
+  bool          created         = 6; 
+}
+
+message GetBalanceRequest {
+  string organization_id = 1; 
+}
+
+message GetBalanceResponse {
+  int64        balance_kobo = 1;
+  string       currency     = 2;
+  WalletStatus status       = 3;
+}
+
+
+message ChargeWalletRequest {
+  string      organization_id  = 1; 
+  ServiceType service_type     = 2; 
+  string      idempotency_key  = 3; 
+}
+
+message ChargeWalletResponse {
+  int64  cost_kobo        = 1; // amount deducted in kobo
+  int64  new_balance_kobo = 2; // balance after deduction
+}
+
+message FundWalletRequest {
+  string organization_id = 1; // required
+  int64  amount_kobo     = 2; // required — must be > 0
+  string idempotency_key = 3; // required — dedup on network retry
+}
+
+message FundWalletResponse {
+  int64  new_balance_kobo = 1;
+  string reference        = 2; // echoes back the idempotency_key
+}
+
+message RefundWalletRequest {
+  string      organization_id = 1; // required
+  ServiceType service_type    = 2; // required — determines refund amount from PRICING
+  string      reference       = 3; // required — typically "refund_failed_<logId>"
+}
+
+message RefundWalletResponse {
+  int64 new_balance_kobo = 1;
+}
+
+
+message GetTransactionsRequest {
+  string organization_id = 1; // required
+  int32  page            = 2; // 1-indexed, defaults to 1
+  int32  limit           = 3; // max records per page, defaults to 20
+}
+
+message GetTransactionsResponse {
+  int32               total        = 1; // total number of transactions
+  int32               page         = 2;
+  int32               pages        = 3; // total number of pages
+  repeated Transaction transactions = 4;
+}

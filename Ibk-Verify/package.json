@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@elastic/elasticsearch": "^8.19.1",
+    "@grpc/grpc-js": "^1.14.3",
+    "@grpc/proto-loader": "^0.8.0",
     "@opentelemetry/auto-instrumentations-node": "^0.71.0",
     "@opentelemetry/sdk-node": "^0.213.0",
     "amqplib": "^0.10.9",
