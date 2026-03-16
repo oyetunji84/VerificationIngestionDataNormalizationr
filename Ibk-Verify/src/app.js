@@ -4,6 +4,7 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const verifyRoutes = require("../src/route/verifyRoute");
 const webHookRoutes = require("../src/route/webhookRoute");
+const billingRoutes = require("../src/route/billingRoute");
 const mongoose = require("mongoose");
 const { sequelize } = require("../src/config/Postgress");
 const { redisClient } = require("../src/config/redis");
@@ -69,6 +70,7 @@ app.get("/metrics", async (req, res) => {
 console.log("here");
 app.use("/api", verifyRoutes);
 app.use("/api", webHookRoutes);
+app.use("/api/billing", billingRoutes);
 app.use((err, req, res, next) => {
   console.error(err.stack);
   const statusCode = err.statusCode || 500;

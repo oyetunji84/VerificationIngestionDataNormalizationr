@@ -1,7 +1,6 @@
 const { SpanStatusCode } = require("@opentelemetry/api");
 
 const withSpan = async (tracer, name, attributes = {}, fn) => {
-  console.log(tracer);
   const span = tracer.startSpan(name, { attributes });
   try {
     const result = await fn(span);
