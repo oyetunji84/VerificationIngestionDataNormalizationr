@@ -1,13 +1,7 @@
-/**
- * Usage:
- *   const result = await withSpan(tracer, "billing.charge_wallet", { "billing.org": companyId }, async () => {
- *     return await doWork();
- *   });
- */
-
 const { SpanStatusCode } = require("@opentelemetry/api");
 
 const withSpan = async (tracer, name, attributes = {}, fn) => {
+  console.log(tracer);
   const span = tracer.startSpan(name, { attributes });
   try {
     const result = await fn(span);

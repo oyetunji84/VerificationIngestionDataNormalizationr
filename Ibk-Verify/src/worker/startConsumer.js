@@ -61,7 +61,8 @@ const startWorker = () => {
             code: SpanStatusCode.ERROR,
             message: error.message,
           });
-          console.error(`Error processing job ${logId}:`, error.message);
+          console.log(error);
+          console.error(` Error processing job ${logId}:`, error.message);
 
           const { classification, reason } = classifyGrpcError(error);
           console.error(

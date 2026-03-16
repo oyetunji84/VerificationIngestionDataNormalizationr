@@ -81,6 +81,7 @@ class BillingService {
         if (cached) return cached;
 
         if (amount <= 0) {
+          
           const error = new Error("Funding amount must be positive.");
           error.code = "INVALID_ARGUMENT";
           throw error;

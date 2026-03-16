@@ -27,6 +27,7 @@ const refundWalletHandler = async (call, callback) => {
       message: "service_type is required and must not be UNSPECIFIED",
     });
   }
+
   if (!reference) {
     return callback({
       code: grpc.status.INVALID_ARGUMENT,
