@@ -79,7 +79,7 @@ class VerificationService {
 
   async webhookHandler(payload) {
     const { verificationId, status, data, error } = payload;
-
+    console.log(payload);
     if (!payload) {
       throw new AppError(
         "Invalid webhook payload. Missing webhook details.",
@@ -87,7 +87,9 @@ class VerificationService {
         "BAD_REQUEST",
       );
     }
+
     const log = await logModel.findById(verificationId);
+    console.log(log);
     if (!log) {
       throw new AppError(
         "Verification record not found for webhook.",
@@ -163,7 +165,7 @@ class VerificationService {
     );
 
     try {
-      const callbackUrl = `${process.env.GATEWAY_BASE_URL}/api/v1/webhook/gov-provider`;
+      const callbackUrl = `${process.env.GATEWAY_BASE_URL}/api/webhook/gov-provider`;
       let providerResponse = null;
       switch (type.toUpperCase()) {
         case "NIN":
@@ -189,7 +191,7 @@ class VerificationService {
         default:
           throw new Error("Invalid verification type");
       }
-
+      console.log(providerResponse);
       if (providerResponse.status !== 202) {
         throw new Error(
           `Unexpected response from gov-provider: ${providerResponse.status}`,
@@ -228,7 +230,7 @@ class VerificationService {
       if (responsePayload && responsePayload.photo) {
         update.responsePayload.photo = "[BASE64_IMAGE_TRUNCATED]";
       }
-      await logModel.findByIdAndUpdate({ logId }, update, { new: true });
+      await logModel.findByIdAndUpdate(logId, update, { new: true });
     } catch (logError) {
       console.error(`Failed to update log ${logId}:`, logError);
     }

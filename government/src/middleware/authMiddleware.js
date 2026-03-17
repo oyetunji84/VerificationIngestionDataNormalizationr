@@ -36,7 +36,7 @@ const authenticate = async (req, res, next) => {
         message: "ORGANIZATION SUSPENDED",
       });
     }
-
+    console.log(organization);
     req.organization = organization;
     next();
   } catch (error) {

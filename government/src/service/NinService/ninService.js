@@ -1,4 +1,4 @@
-const NIN = require("../../model/BvnModel");
+const NIN = require("../../model/ninModel");
 
 const LogModel = require("../../model/LogModel");
 const billingService = require("../billingService/billingService");
@@ -6,17 +6,19 @@ const AppError = require("../../utils/error");
 
 class NINService {
   async verify(id, organization, idempotencyKey) {
+    console.log(id);
     const Result = await billingService.chargeWallet(
       organization._id.toString(),
       "NIN",
       idempotencyKey,
     );
+    console.log(Result);
 
     if (!Result.success) {
       let statusCode = 500;
       let errorCode = "500";
 
-      switch (billingResult.error) {
+      switch (Result.error) {
         case "INSUFFICIENT_FUNDS":
           statusCode = 402; // Payment Required
           errorCode = "402";
@@ -35,13 +37,15 @@ class NINService {
       }
 
       throw new AppError(
-        billingResult.message || "Billing failed",
+        Result.message || "Billing failed",
         statusCode,
         errorCode,
       );
     }
 
     try {
+      console.log(id);
+      console.log(await NIN.findOne({}));
       const record = await NIN.findOne({ nin: id });
       console.log(record);
       if (!record) {

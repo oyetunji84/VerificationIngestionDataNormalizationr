@@ -46,6 +46,7 @@ class normalize {
   }
 
   async normalize(type, data = {}) {
+    let specific;
     switch (type) {
       case "NIN":
         specific = {

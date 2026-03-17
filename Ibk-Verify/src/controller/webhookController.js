@@ -14,7 +14,7 @@ exports.handleGovProviderWebhook = asyncHandler(async (req, res) => {
 
   console.log(`Received webhook for verification ${verificationId}`);
 
-  await verificationService.handleWebhook(req.body);
+  await verificationService.webhookHandler(req.body);
 
   res.status(200).json({ status: "success", message: "Webhook processed" });
 });

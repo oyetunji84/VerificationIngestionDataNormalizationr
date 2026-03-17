@@ -19,18 +19,23 @@ const VERIFICATION_SERVICES = {
 };
 
 const runVerification = async (type, id, organization, idempotencyKey) => {
+  console.log(type, id);
   const service = VERIFICATION_SERVICES[type];
   if (!service) throw new Error(`Invalid verification type: ${type}`);
   return service.verify(id, organization, idempotencyKey);
 };
 
 const sendWebhook = async (callbackUrl, verificationId, result, error) => {
-  await axios.post(callbackUrl, {
-    verificationId,
-    status: error ? "FAILED" : "COMPLETED",
-    data: result?.data ?? null,
-    error: error ?? null,
-  });
+  await axios.post(
+    callbackUrl,
+    {
+      verificationId,
+      status: error ? "FAILED" : "COMPLETED",
+      data: result?.data ?? null,
+      error: error ?? null,
+    },
+    { timeout: 10000 },
+  );
 };
 
 const processJob = async (jobData) => {

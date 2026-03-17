@@ -73,7 +73,7 @@ class BillingService {
           error.code = "BILLING400";
           throw error;
         }
-
+        console.log("funding");
         const t = await sequelize.transaction();
         try {
           const wallet = await Wallet.findOne({

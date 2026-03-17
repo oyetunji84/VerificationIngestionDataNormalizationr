@@ -17,8 +17,7 @@ const elasticSchema = {
       retryCount: { type: "integer" },
       errorMessage: { type: "text" },
       responsePayload: {
-        type: "object",
-        enabled: true,
+        type: "flattened",
       },
       requestedAt: { type: "date" },
       completedAt: { type: "date" },

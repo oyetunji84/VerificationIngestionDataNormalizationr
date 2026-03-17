@@ -3,7 +3,8 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const routes = require("../src/route/govRouter");
-require("../src/config/otel");
+const billingRoutes = require("../src/route/billingRouter");
+
 const app = express();
 
 app.use(helmet());
@@ -15,6 +16,7 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "UP", service: "Gov Provider" });
 });
 
+app.use("/api/billing", billingRoutes);
 app.use("/api", routes);
 
 app.use((err, req, res, next) => {

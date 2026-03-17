@@ -8,7 +8,7 @@ const {
   getChannel,
 } = require("../config/rabbitmq");
 const { elasticSchema } = require("../model/elasticSearchModel");
-
+const MAX_RETRIES = 5;
 async function indexLog(log) {
   const es = getElasticsearchClient();
   await es.index({
@@ -32,6 +32,7 @@ async function indexLog(log) {
     },
   });
 }
+const getRetryDelay = (attempt) => Math.pow(2, attempt) * 1000; //
 function getRetryCount(msg) {
   const xDeath = msg.properties.headers?.["x-death"];
   if (!xDeath || !Array.isArray(xDeath)) return 0;

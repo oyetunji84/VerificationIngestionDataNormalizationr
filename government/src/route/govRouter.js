@@ -11,11 +11,15 @@ const validatePrivacy = require("../middleware/validateMiddleware");
 // const rateLimit = require("../../middlewares/rateLimit.middleware");
 // rateLimit("nin", 100);
 router.use(authorize);
-router.use(validatePrivacy);
+// router.use(validatePrivacy);
 
-router.post("/verify/nin", ninController.verifyNIN);
-router.post("/verify/bvn", bvnController.verifyBVN);
-router.post("/verify/passport", passportController.verifyPassport);
-router.post("/verify/license", dlController.verifyDL);
+router.post("/verify/nin", validatePrivacy, ninController.verifyNIN);
+router.post("/verify/bvn", validatePrivacy, bvnController.verifyBVN);
+router.post(
+  "/verify/passport",
+  validatePrivacy,
+  passportController.verifyPassport,
+);
+router.post("/verify/license", validatePrivacy, dlController.verifyDL);
 
 module.exports = router;

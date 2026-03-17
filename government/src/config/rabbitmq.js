@@ -2,17 +2,17 @@ const amqp = require("amqplib");
 
 const RABBITMQ_URL = process.env.RABBITMQ_URL || "amqp://rabbitmq:5672";
 
-const GOV_EXCHANGE = "verification-exchange";
-const GOV_QUEUE = "verification-queue";
-const GOV_ROUTING_KEY = "verification";
+const GOV_EXCHANGE = "verification-gov-exchange";
+const GOV_QUEUE = "verification-gov-queue";
+const GOV_ROUTING_KEY = "verification-gov";
 
-const GOV_RETRY_EXCHANGE = "verification-retry-exchange";
-const GOV_RETRY_QUEUE = "verification-retry-queue";
-const GOV_RETRY_ROUTING_KEY = "verification.retry";
+const GOV_RETRY_EXCHANGE = "verification-gov-retry-exchange";
+const GOV_RETRY_QUEUE = "verification-gov-retry-queue";
+const GOV_RETRY_ROUTING_KEY = "verification.gov-retry";
 
-const GOV_DLX = "verification-dlx";
-const GOV_DLQ = "verification-dlq";
-const GOV_DLQ_ROUTING_KEY = "verification.dlq";
+const GOV_DLX = "verification-gov-dlx";
+const GOV_DLQ = "verification-gov-dlq";
+const GOV_DLQ_ROUTING_KEY = "verification.gov-dlq";
 
 let channel = null;
 

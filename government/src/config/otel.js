@@ -6,6 +6,7 @@ const {
   OTLPTraceExporter,
 } = require("@opentelemetry/exporter-trace-otlp-grpc");
 const { resourceFromAttributes } = require("@opentelemetry/resources");
+
 const { ATTR_SERVICE_NAME } = require("@opentelemetry/semantic-conventions");
 
 const exporter = new OTLPTraceExporter({
@@ -24,18 +25,8 @@ Promise.resolve(sdk.start()).catch((error) => {
   console.error("OpenTelemetry initialization failed:", error);
 });
 
-const shutdown = (signal) => {
-  sdk
-    .shutdown()
-    .then(() => {
-      console.log(`OpenTelemetry shut down successfully (${signal})`);
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error("OpenTelemetry shutdown failed:", error);
-      process.exit(1);
-    });
-};
-
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => {
+  sdk.shutdown().catch((error) => {
+    console.error("OpenTelemetry shutdown failed:", error);
+  });
+});

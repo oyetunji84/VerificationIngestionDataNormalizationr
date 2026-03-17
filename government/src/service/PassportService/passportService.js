@@ -35,7 +35,7 @@ class PassportService {
       }
 
       throw new AppError(
-        billingResult.message || "Billing failed",
+        Result.message || "Billing failed",
         statusCode,
         errorCode,
       );
