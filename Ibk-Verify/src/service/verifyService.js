@@ -191,7 +191,6 @@ class VerificationService {
         default:
           throw new Error("Invalid verification type");
       }
-      console.log(providerResponse);
       if (providerResponse.status !== 202) {
         throw new Error(
           `Unexpected response from gov-provider: ${providerResponse.status}`,

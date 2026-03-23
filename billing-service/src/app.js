@@ -14,13 +14,18 @@ const bootstrap = async () => {
     logger.info("Starting billing service...");
 
     await connectDatabase();
-    await connectRedis();
+    try {
+      await connectRedis();
+    } catch (err) {
+      logger.error(err, "1 I am the best ");
+    }
 
     const server = createServer(handlers, interceptors);
     await startServer(server);
 
     logger.info("Billing service ready");
   } catch (error) {
+    console.log(error);
     logger.error("Failed to start billing service", { error: error.message });
     process.exit(1);
   }

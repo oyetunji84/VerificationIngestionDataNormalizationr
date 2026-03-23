@@ -30,7 +30,6 @@ class BaseVerificationService {
           },
         },
       );
-      console.log(response);
       return response;
     } catch (error) {
       throw this._handleError(error);

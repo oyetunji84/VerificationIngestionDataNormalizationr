@@ -31,4 +31,4 @@ class LogService {
   }
 }
 
-module.exports = new AuditService();
+module.exports = new LogService();

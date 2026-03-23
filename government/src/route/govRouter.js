@@ -8,11 +8,9 @@ const dlController = require("../../src/controller/licenseController");
 
 const authorize = require("../middleware/authMiddleware");
 const validatePrivacy = require("../middleware/validateMiddleware");
-// const rateLimit = require("../../middlewares/rateLimit.middleware");
-// rateLimit("nin", 100);
+const rateLimit = require("../middleware/rateLimiter");
 router.use(authorize);
-// router.use(validatePrivacy);
-
+router.use(rateLimit);
 router.post("/verify/nin", validatePrivacy, ninController.verifyNIN);
 router.post("/verify/bvn", validatePrivacy, bvnController.verifyBVN);
 router.post(

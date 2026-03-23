@@ -1,9 +1,7 @@
-const { sequelize } = require("../../config/PostgressDb");
 const { redisClient } = require("../../config/redis");
-const Wallet = require("../../model/WalletModel");
-const Transaction = require("../../model/TransactionModel");
 const PRICING = require("../../utils/pricing");
 const { trace, SpanStatusCode } = require("@opentelemetry/api");
+const billingRepository = require("../../repository/billingRepository");
 
 const tracer = trace.getTracer("gov-provider");
 
@@ -27,13 +25,7 @@ class BillingService {
     return withBillingSpan(
       "billing.find_or_create_wallet",
       { "billing.organization_id": organizationId },
-      async () => {
-        const [wallet, created] = await Wallet.findOrCreate({
-          where: { organizationId },
-          defaults: { organizationId },
-        });
-        return { wallet, created };
-      },
+      () => billingRepository.findOrCreateWallet(organizationId),
     );
   }
 
@@ -42,7 +34,7 @@ class BillingService {
       "billing.get_balance",
       { "billing.organization_id": organizationId },
       async () => {
-        const wallet = await Wallet.findOne({ where: { organizationId } });
+        const wallet = await billingRepository.findWallet(organizationId);
         if (!wallet) {
           const error = new Error("Wallet not found for this organization.");
           error.code = "BILLING404";
@@ -68,19 +60,16 @@ class BillingService {
           );
           if (cachedResult) return JSON.parse(cachedResult);
         }
+
         if (amount <= 0) {
           const error = new Error("Funding amount must be positive.");
           error.code = "BILLING400";
           throw error;
         }
-        console.log("funding");
-        const t = await sequelize.transaction();
+
+        const t = await billingRepository.beginTransaction();
         try {
-          const wallet = await Wallet.findOne({
-            where: { organizationId },
-            transaction: t,
-            lock: t.LOCK.UPDATE,
-          });
+          const wallet = await billingRepository.findWallet(organizationId, t);
           if (!wallet) {
             const error = new Error("Wallet not found for this organization.");
             error.code = "404";
@@ -88,13 +77,10 @@ class BillingService {
           }
 
           const balanceBefore = Number(wallet.balance);
-
-          await wallet.increment("balance", { by: amount, transaction: t });
-          await wallet.reload({ transaction: t });
-
+          await billingRepository.incrementWalletBalance(wallet, amount, t);
           const balanceAfter = Number(wallet.balance);
 
-          await Transaction.create(
+          await billingRepository.createTransaction(
             {
               walletId: wallet.id,
               type: "CREDIT",
@@ -105,7 +91,7 @@ class BillingService {
               reference: idempotencyKey || reference,
               status: "SUCCESS",
             },
-            { transaction: t },
+            t,
           );
 
           await t.commit();
@@ -122,6 +108,7 @@ class BillingService {
               { EX: 86400 },
             );
           }
+
           return result;
         } catch (error) {
           await t.rollback();
@@ -156,30 +143,28 @@ class BillingService {
           };
         }
 
-        const t = await sequelize.transaction();
+        const t = await billingRepository.beginTransaction();
         try {
-          const clientWallet = await Wallet.findOne({
-            where: { organizationId },
-            transaction: t,
-            lock: t.LOCK.UPDATE,
-          });
+          const wallet = await billingRepository.findWallet(organizationId, t);
 
-          if (!clientWallet) {
+          if (!wallet) {
+            await t.rollback();
             return {
               success: false,
               error: "WALLET_NOT_FOUND",
               message: "Client wallet does not exist.",
             };
           }
-          if (clientWallet.status === "SUSPENDED") {
+          if (wallet.status === "SUSPENDED") {
+            await t.rollback();
             return {
               success: false,
               error: "WALLET_SUSPENDED",
               message: "Client wallet is suspended.",
             };
           }
-
-          if (Number(clientWallet.balance) < cost) {
+          if (Number(wallet.balance) < cost) {
+            await t.rollback();
             return {
               success: false,
               error: "INSUFFICIENT_FUNDS",
@@ -187,34 +172,27 @@ class BillingService {
             };
           }
 
-          const clientBalanceBefore = Number(clientWallet.balance);
+          const balanceBefore = Number(wallet.balance);
+          await billingRepository.decrementWalletBalance(wallet, cost, t);
+          const balanceAfter = Number(wallet.balance);
 
-          await clientWallet.decrement("balance", { by: cost, transaction: t });
-
-          await clientWallet.reload({ transaction: t });
-
-          const clientBalanceAfter = Number(clientWallet.balance);
-
-          await Transaction.create(
+          await billingRepository.createTransaction(
             {
-              walletId: clientWallet.id,
+              walletId: wallet.id,
               type: "DEBIT",
               amount: cost,
-              balanceBefore: clientBalanceBefore,
-              balanceAfter: clientBalanceAfter,
+              balanceBefore,
+              balanceAfter,
               description: `${serviceType} Verification`,
               reference: idempotencyKey,
             },
-            { transaction: t },
+            t,
           );
 
           await t.commit();
 
-          const result = {
-            success: true,
-            cost,
-            newBalance: clientBalanceAfter,
-          };
+          const result = { success: true, cost, newBalance: balanceAfter };
+
           if (idempotencyKey) {
             await redisClient.set(
               `billing:${idempotencyKey}`,
@@ -222,6 +200,7 @@ class BillingService {
               { EX: 86400 },
             );
           }
+
           return result;
         } catch (error) {
           await t.rollback();
@@ -249,20 +228,18 @@ class BillingService {
         "billing.limit": Number(limit),
       },
       async () => {
-        const wallet = await Wallet.findOne({ where: { organizationId } });
+        const wallet = await billingRepository.findWallet(organizationId);
         if (!wallet) {
           const error = new Error("Wallet not found for this organization.");
           error.code = "BILLING404";
           throw error;
         }
 
-        const offset = (page - 1) * limit;
-        const { count, rows } = await Transaction.findAndCountAll({
-          where: { walletId: wallet.id },
-          order: [["createdAt", "DESC"]],
+        const { count, rows } = await billingRepository.getTransactionHistory(
+          wallet.id,
+          page,
           limit,
-          offset,
-        });
+        );
 
         return {
           total: count,
