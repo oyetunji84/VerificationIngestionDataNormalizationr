@@ -3,6 +3,7 @@ const {
   GOV_QUEUE,
   publishToRetryQueue,
 } = require("../config/rabbitmq");
+const crypto = require("crypto");
 const axios = require("axios");
 const ninService = require("../service/NinService/ninService");
 const bvnService = require("../service/BvnService/bvnService");
@@ -26,16 +27,27 @@ const runVerification = async (type, id, organization, idempotencyKey) => {
 };
 
 const sendWebhook = async (callbackUrl, verificationId, result, error) => {
-  await axios.post(
-    callbackUrl,
-    {
-      verificationId,
-      status: error ? "FAILED" : "COMPLETED",
-      data: result?.data ?? null,
-      error: error ?? null,
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const payload = {
+    verificationId,
+    status: error ? "FAILED" : "COMPLETED",
+    data: result?.data ?? null,
+    error: error ?? null,
+  };
+  const rawBody = JSON.stringify(payload);
+  const signedPayload = `${timestamp}.${rawBody}`;
+  const signature = crypto
+    .createHmac("sha256", WEBHOOK_SECRET)
+    .update(signedPayload)
+    .digest("hex");
+  await axios.post(callbackUrl, payload, {
+    headers: {
+      "Content-Type": "application/json",
+      "x-webhook-signature": signature,
+      "x-webhook-timestamp": timestamp,
     },
-    { timeout: 10000 },
-  );
+    timeout: 10000,
+  });
 };
 
 const processJob = async (jobData) => {

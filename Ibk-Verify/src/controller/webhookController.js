@@ -3,7 +3,8 @@ const asyncHandler = require("../utils/asyncHandler");
 const AppError = require("../utils/error");
 
 exports.handleGovProviderWebhook = asyncHandler(async (req, res) => {
-  const { verificationId } = req.body;
+  const payload = JSON.parse(req.body);
+  const { verificationId } = payload;
   if (!verificationId) {
     throw new AppError(
       "Missing verificationId in webhook payload",
