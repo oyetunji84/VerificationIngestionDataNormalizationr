@@ -17,7 +17,7 @@ const bootstrap = async () => {
     try {
       await connectRedis();
     } catch (err) {
-      logger.error(err, "1 I am the best ");
+      logger.error(err, "1 I am the best");
     }
 
     const server = createServer(handlers, interceptors);
