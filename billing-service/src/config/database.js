@@ -20,5 +20,11 @@ const connectDatabase = async () => {
   //   await sequelize.sync({ alter: env.NODE_ENV !== "production" });
   logger.info("Billing DB connected and synced");
 };
-
-module.exports = { sequelize, connectDatabase };
+const disconnectDatabase = async () => {
+  try {
+    await sequelize.close();
+  } catch (err) {
+    logger.error("Error disconnecting database", { err: err.message });
+  }
+};
+module.exports = { sequelize, connectDatabase, disconnectDatabase };

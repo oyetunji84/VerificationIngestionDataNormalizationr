@@ -127,8 +127,20 @@ const publishToRetryQueue = (data, delayMs) => {
     { persistent: true, expiration: delayMs.toString() },
   );
 };
+const disconnectRabbitMQ = async () => {
+  try {
+    if (channel) {
+      await channel.close();
+      console.log("RabbitMQ channel closed.");
+    }
+    // me clossing the channel here  does not mean I have close the connection right
+  } catch (err) {
+    console.error("Error disconnecting RabbitMQ", err);
+  }
+};
 
 module.exports = {
+  disconnectRabbitMQ,
   connectRabbitMQ,
   publishToQueue,
   publishToRetryQueue,

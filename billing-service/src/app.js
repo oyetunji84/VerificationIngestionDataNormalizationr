@@ -1,9 +1,9 @@
 const { initTelemetry } = require("./config/telemetry");
 initTelemetry();
-
+require("./config/env");
 // ── Step 2: Everything else ───────────────────────────────────────────────────
-const { connectDatabase } = require("./config/database");
-const { connectRedis } = require("./config/redis");
+const { connectDatabase, disconnectDatabase } = require("./config/database");
+const { connectRedis, disconnectRedis } = require("./config/redis");
 const { createServer, startServer } = require("./config/server");
 const handlers = require("./modules/billing/handlers");
 const interceptors = require("./interceptors");

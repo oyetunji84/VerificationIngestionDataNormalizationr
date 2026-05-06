@@ -6,7 +6,6 @@ const verifyRoutes = require("../src/route/verifyRoute");
 const webHookRoutes = require("../src/route/webhookRoute");
 const billingRoutes = require("../src/route/billingRoute");
 const mongoose = require("mongoose");
-const { sequelize } = require("../src/config/Postgress");
 const { redisClient } = require("../src/config/redis");
 const { getChannel } = require("../src/config/rabbitmq");
 const { getElasticsearchClient } = require("./config/elasticsearch");
@@ -32,13 +31,6 @@ app.get("/health/ready", async (req, res) => {
     rabbitmq: getChannel() ? "UP" : "DOWN",
     elasticsearch: "DOWN",
   };
-
-  try {
-    await sequelize.authenticate();
-    checks.postgres = "UP";
-  } catch (error) {
-    checks.postgres = "DOWN";
-  }
 
   try {
     const esClient = getElasticsearchClient();
