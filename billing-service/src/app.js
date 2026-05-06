@@ -9,6 +9,29 @@ const handlers = require("./modules/billing/handlers");
 const interceptors = require("./interceptors");
 const logger = require("./utils/logger");
 
+const gracefulShutdown = async (signal, server) => {
+  logger.info(`${signal} received — shutting down billing service...`);
+
+  await new Promise((resolve, reject) => {
+    server.tryShutdown((err) => {
+      if (err) {
+        logger.error("gRPC server failed to shutdown gracefully, forcing...");
+        server.forceShutdown();
+      }
+      logger.info("gRPC server closed");
+      resolve();
+    });
+  });
+
+  await disconnectRedis();
+  logger.info("Redis connection closed");
+
+  await disconnectDatabase();
+  logger.info("Database connection closed");
+
+  logger.info("Billing service shut down cleanly");
+  process.exit(0);
+};
 const bootstrap = async () => {
   try {
     logger.info("Starting billing service...");
@@ -22,7 +45,8 @@ const bootstrap = async () => {
 
     const server = createServer(handlers, interceptors);
     await startServer(server);
-
+    process.on("SIGINT", () => gracefulShutdown("SIGINT", server));
+    process.on("SIGTERM", () => gracefulShutdown("SIGTERM", server));
     logger.info("Billing service ready");
   } catch (error) {
     console.log(error);

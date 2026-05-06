@@ -42,7 +42,7 @@ class BaseVerificationService {
       );
       customError.statusCode = error.response.status;
       customError.code = error.response.data?.code;
-      return customError;
+      throw customError;
     }
     return new Error(`Verification failed: ${error.message}`);
   }

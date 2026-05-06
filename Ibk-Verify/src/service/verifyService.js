@@ -8,9 +8,6 @@ const { redisClient } = require("../config/redis.js");
 const { incrementMetric } = require("../utils/metrics.js");
 const { publishToQueue } = require("../config/rabbitmq.js");
 const { injectTraceHeaders } = require("../utils/tracing.js");
-// const {
-//   enqueueelasticSchema,
-// } = require("../../audit/search/search-index.publisher");
 const crypto = require("crypto");
 
 const CACHE_TTL = 3600;

@@ -25,6 +25,7 @@
     "@opentelemetry/semantic-conventions": "^1.40.0",
     "dotenv": "^17.3.1",
     "ioredis": "^5.10.0",
+    "joi": "^18.2.1",
     "pg": "^8.20.0",
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.8",

@@ -7,7 +7,7 @@ const { validateSchema } = require("../middleware/validateSchema");
 const { fundSchema, historySchema } = require("../validator/billingSchema");
 
 router.use(authorize);
-console.log("here 1");
+
 router.post("/wallet", billingController.createWallet);
 router.post(
   "/fund",
