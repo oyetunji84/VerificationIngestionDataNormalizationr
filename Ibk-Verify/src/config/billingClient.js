@@ -1,11 +1,11 @@
 const grpc = require("@grpc/grpc-js");
 const protoLoader = require("@grpc/proto-loader");
 const path = require("path");
+const config = require("./env");
 const PROTO_PATH_1 = path.join(__dirname);
 const PROTO_PATH = path.join(__dirname, "../proto/billing/v1/billing.proto");
 console.log(PROTO_PATH, PROTO_PATH_1);
-const BILLING_SERVICE_URL =
-  process.env.BILLING_SERVICE_URL || "localhost:50051";
+const BILLING_SERVICE_URL = config.BILLING_SERVICE_URL || "localhost:50051";
 
 const STARTUP_CONNECT_TIMEOUT_MS = 10_000;
 

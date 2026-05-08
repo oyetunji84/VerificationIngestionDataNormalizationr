@@ -1,8 +1,7 @@
 const { Client } = require("@elastic/elasticsearch");
 const { elasticSchema } = require("../model/elasticSearchModel");
-
-const ELASTICSEARCH_URL =
-  process.env.ELASTICSEARCH_URL || "http://localhost:9200";
+const config = require("./env");
+const ELASTICSEARCH_URL = config.ELASTICSEARCH_URL || "http://localhost:9200";
 
 let esClient = null;
 

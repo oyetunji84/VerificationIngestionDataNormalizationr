@@ -1,4 +1,5 @@
 const { NodeSDK } = require("@opentelemetry/sdk-node");
+const config = require("../config/env");
 const {
   getNodeAutoInstrumentations,
 } = require("@opentelemetry/auto-instrumentations-node");
@@ -10,12 +11,12 @@ const { resourceFromAttributes } = require("@opentelemetry/resources");
 const { ATTR_SERVICE_NAME } = require("@opentelemetry/semantic-conventions");
 
 const exporter = new OTLPTraceExporter({
-  url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || "http://localhost:4317",
+  url: config.OTEL_EXPORTER_OTLP_ENDPOINT || "http://localhost:4317",
 });
 
 const sdk = new NodeSDK({
   resource: resourceFromAttributes({
-    [ATTR_SERVICE_NAME]: process.env.SERVICE_NAME || "ibk-verify",
+    [ATTR_SERVICE_NAME]: config.SERVICE_NAME || "ibk-verify",
   }),
   traceExporter: exporter,
   instrumentations: [getNodeAutoInstrumentations()],

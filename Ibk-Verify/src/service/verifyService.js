@@ -9,7 +9,7 @@ const { incrementMetric } = require("../utils/metrics.js");
 const { publishToQueue } = require("../config/rabbitmq.js");
 const { injectTraceHeaders } = require("../utils/tracing.js");
 const crypto = require("crypto");
-
+const config = require("../config/env");
 const CACHE_TTL = 3600;
 
 const bvnService = new baseService("api/verify/bvn");
@@ -162,7 +162,7 @@ class VerificationService {
     );
 
     try {
-      const callbackUrl = `${process.env.GATEWAY_BASE_URL}/api/webhook/gov-provider`;
+      const callbackUrl = `${config.GATEWAY_BASE_URL}/api/webhook/gov-provider`;
       let providerResponse = null;
       switch (type.toUpperCase()) {
         case "NIN":

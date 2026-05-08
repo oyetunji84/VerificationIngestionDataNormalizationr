@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const AppError = require("../utils/error");
-
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+const config = require("../config/env");
+const WEBHOOK_SECRET = config.WEBHOOK_SECRET;
 const TIMESTAMP_TOLERANCE = 5 * 60;
 
 function verifyWebhook(req, res, next) {

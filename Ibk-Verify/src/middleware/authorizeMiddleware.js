@@ -1,4 +1,4 @@
-require("dotenv").config("../../.env");
+const config = require("../config/env");
 const CompanyModel = require("../model/CompanyModel.js");
 // const { hashApiKey } = require("../utils/apikey.util");
 const { hashApiKey } = require("../utils/apiKey.util");
@@ -6,7 +6,7 @@ const { hashApiKey } = require("../utils/apiKey.util");
 const authenticate = async (req, res, next) => {
   try {
     const apiKey = req.headers["x-api-key"];
-    const pepper = process.env.API_KEY_PEPPER;
+    const pepper = config.API_KEY_PEPPER;
 
     if (!pepper) {
       return res.status(500).json({

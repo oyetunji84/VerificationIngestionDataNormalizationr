@@ -1,12 +1,10 @@
 const mongoose = require("mongoose");
+const config = require("./env");
 const MONGO_URI =
-  process.env.MONGO_URI || "mongodb://localhost:27017/Ibkverify-gateway";
+  config.MONGO_URI || "mongodb://localhost:27017/Ibkverify-gateway";
 
 mongoose.set("bufferCommands", false);
-mongoose.set(
-  "bufferTimeoutMS",
-  Number(process.env.MONGO_BUFFER_TIMEOUT_MS || 3000),
-);
+mongoose.set("bufferTimeoutMS", Number(config.MONGO_BUFFER_TIMEOUT_MS || 3000));
 
 const connectMongoDB = async () => {
   try {

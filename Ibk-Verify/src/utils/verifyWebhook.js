@@ -1,5 +1,6 @@
+const config = require("../config/env");
 const crypto = require("crypto");
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+const WEBHOOK_SECRET = config.WEBHOOK_SECRET;
 const TIMESTAMP_TOLERANCE_SECONDS = 300;
 
 const verifyWebhookSignature = (webHookSig, webhookStamp, payload) => {

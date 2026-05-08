@@ -1,16 +1,16 @@
 const axios = require("axios");
 const crypto = require("crypto");
-
+const config = require("../config/env");
 class BaseVerificationService {
   constructor(endpoint) {
     if (!endpoint) throw new Error("endpoint is required");
     this.endpoint = endpoint;
-    this.baseUrl = process.env.BASE_URL;
+    this.baseUrl = config.BASE_URL;
     this.client = axios.create({
       baseURL: this.baseUrl,
       timeout: 5000,
       headers: {
-        "x-api-key": process.env.API_KEY,
+        "x-api-key": config.API_KEY,
       },
     });
   }

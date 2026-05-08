@@ -1,3 +1,4 @@
+const config = require("../config/env");
 const {
   getChannel,
   VERIFICATION_MAIN_QUEUE,
@@ -15,7 +16,7 @@ const {
 } = require("../utils/grpcErrorClassifer");
 
 const MAX_RETRIES = 5;
-const tracer = trace.getTracer(process.env.OTEL_SERVICE_NAME);
+const tracer = trace.getTracer(config.OTEL_SERVICE_NAME);
 
 const startWorker = () => {
   const channel = getChannel();

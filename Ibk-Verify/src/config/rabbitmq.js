@@ -1,6 +1,6 @@
 const amqp = require("amqplib");
-
-const RABBITMQ_URL = process.env.RABBITMQ_URL || "amqp://rabbitmq:5672";
+const config = require("./env");
+const RABBITMQ_URL = config.RABBITMQ_URL || "amqp://rabbitmq:5672";
 
 const VERIFICATION_MAIN_EXCHANGE = "verification-main-exchange";
 const VERIFICATION_MAIN_QUEUE = "verification-main-queue";

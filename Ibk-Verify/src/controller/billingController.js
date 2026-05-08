@@ -4,7 +4,7 @@ const generateKey = require("../utils/generateUUId");
 exports.getBalance = asyncHandler(async (req, res) => {
   const organizationId = req.company._id.toString();
   const balance = await billingService.getBalance(organizationId);
-  console.log(balance);
+
   res.status(200).json({
     status: "success",
     data: balance,
